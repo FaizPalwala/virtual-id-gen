@@ -1,0 +1,28 @@
+# conf/config.yaml
+defaults:
+  - _self_
+
+dataset:
+  data_root: "../data"
+  n_identities: 400
+  images_per_identity: 40
+  candidates_per_identity: 70
+  n_forget: 40
+  n_test: 60
+  seed: 42
+
+pipeline:
+  dcface_root: "/absolute/path/to/dcface" # Must be overridden at runtime
+  max_images: 30000
+  ctx_id: 0
+  min_similarity: 0.45
+  blur_threshold: 80.0
+  skip_vis: false
+
+# Execution control
+steps:
+  download: true
+  preprocess: true
+  generate: true
+  extract: true
+  build: true
