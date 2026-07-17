@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.conda
+.vscode
+insightface_models
+instantid_controlnet
+models
+outputs
+repomix-output.xml

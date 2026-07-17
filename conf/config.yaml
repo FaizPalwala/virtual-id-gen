@@ -12,12 +12,24 @@ dataset:
   seed: 42
 
 pipeline:
-  dcface_root: "/absolute/path/to/dcface" # Must be overridden at runtime
+  dcface_root: /Users/faiz/Desktop/Apps/dcface/dcface
   max_images: 30000
   ctx_id: 0
   min_similarity: 0.45
   blur_threshold: 80.0
   skip_vis: false
+
+  generator_cmd: >-
+    /Users/faiz/Desktop/Projects/virtual-id-gen/.conda/bin/python
+    /Users/faiz/Desktop/Projects/virtual-id-gen/src/instantid_adapter.py
+    --id_image {id_image}
+    --style_image {style_image}
+    --output_path {output_path}
+    --seed {generation_seed}
+    --ip_adapter_scale 1.0
+    --controlnet_conditioning_scale 1.0
+    --num_inference_steps 25
+    --guidance_scale 5.0
 
 # Execution control
 steps:

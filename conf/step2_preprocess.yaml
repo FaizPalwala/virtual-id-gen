@@ -1,0 +1,10 @@
+defaults:
+  - config
+  - _self_
+
+steps:
+  download: false
+  preprocess: true
+  generate: false
+  extract: false
+  build: false
