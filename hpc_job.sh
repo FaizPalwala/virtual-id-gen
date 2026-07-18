@@ -63,7 +63,7 @@ cd "$TMPDIR/repo/src"
 python instantid_adapter.py \
   --id_image ../../data/processed/SFHQ_pt1_00000006_face.jpg \
   --style_image ../../data/processed/SFHQ_pt1_00000226_face.jpg \
-  --output_path ../../data/tmp \
+  --output_path ../../data/tmp/instantid_output.jpg \
   --seed 42 \
   --width 1024 \
   --height 1024 \
