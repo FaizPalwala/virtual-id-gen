@@ -1,0 +1,74 @@
+#!/bin/bash
+# ==========================================
+# Slurm Resource Allocation
+# ==========================================
+#SBATCH --job-name=msc_datagen_phase1
+#SBATCH --time=24:00:00                  
+#SBATCH --partition=gpu                  
+#SBATCH --gres=gpu:1                     
+#SBATCH --cpus-per-task=8                
+#SBATCH --mem=32G                        
+#SBATCH --output=logs/%x_%j.out          
+#SBATCH --error=logs/%x_%j.err           
+
+# ==========================================
+# 1. Environment Setup
+# ==========================================
+module purge
+module load miniforge
+conda activate data_gen
+
+# ==========================================
+# 2. Path Variables
+# ==========================================
+# SLURM_SUBMIT_DIR is the repo directory where you run sbatch
+REPO_DIR=$SLURM_SUBMIT_DIR
+
+# The data folder is one level up, alongside the repo
+PARENT_DIR=$(dirname "$REPO_DIR")
+DATA_DIR="$PARENT_DIR/data"
+
+# Ensure the local data directory exists for syncing later
+mkdir -p "$DATA_DIR"
+
+# ==========================================
+# 3. Staging (Copy IN to $TMPDIR)
+# ==========================================
+echo "[$(date)] Staging repository and data to node-local scratch..."
+
+# Create isolated folders in TMPDIR to maintain the side-by-side structure
+mkdir -p "$TMPDIR/repo"
+mkdir -p "$TMPDIR/data"
+
+# Copy the entire repository into TMPDIR/repo
+cp -r "$REPO_DIR/"* "$TMPDIR/repo/"
+
+# Copy existing data (if any) into TMPDIR/data so preprocessing has its input
+if [ "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+    cp -r "$DATA_DIR/"* "$TMPDIR/data/"
+fi
+
+# ==========================================
+# 4. Run the Data Generation
+# ==========================================
+echo "[$(date)] Starting Phase 1 Data Generation..."
+cd "$TMPDIR/repo/src"
+
+# Execute the pipeline.
+# We dynamically override dataset.data_root so Hydra knows exactly where the TMPDIR data is.
+python main.py dataset.data_root="$TMPDIR/data" \
+    > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
+
+EXIT_CODE=$?
+
+# ==========================================
+# 5. Data Sync (Copy OUT to Project Directory)
+# ==========================================
+echo "[$(date)] Generation finished with exit code $EXIT_CODE"
+echo "[$(date)] Syncing the data folder back..."
+
+# Rsync safely syncs the newly generated data back alongside your repo folder
+rsync -av "$TMPDIR/data/" "$DATA_DIR/"
+
+echo "[$(date)] Sync complete. Data safely stored at $DATA_DIR"
+exit $EXIT_CODE
