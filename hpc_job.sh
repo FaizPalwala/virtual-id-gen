@@ -68,7 +68,7 @@ python instantid_adapter.py \
   --width 1024 \
   --height 1024 \
   --num_inference_steps 30 \
-  --guidance_scale 5.0
+  --guidance_scale 5.0\
     > "$REPO_DIR/logs/trial_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
