@@ -144,7 +144,7 @@ def main() -> None:
     device, dtype, providers = hardware()
     image_bgr = cv2.imread(args.id_image)
     if image_bgr is None:
-        raise FileNotFoundError(args.id_image)
+        raise FileNotFoundError(Path(args.id_image).resolve())
     analyser = FaceAnalysis(name="antelopev2", root=antelope_root(), providers=providers)
     face = detect_face(analyser, image_bgr, args.id_image)
     adapter_path, controlnet_path = instantid_paths()
