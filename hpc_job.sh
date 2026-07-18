@@ -16,6 +16,7 @@
 # ==========================================
 module purge
 module load miniforge
+module load cuda
 conda activate data_gen
 
 # ==========================================
@@ -56,7 +57,7 @@ cd "$TMPDIR/repo/src"
 
 # Execute the pipeline.
 # We dynamically override dataset.data_root so Hydra knows exactly where the TMPDIR data is.
-python main.py dataset.data_root="$TMPDIR/data" \
+python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
