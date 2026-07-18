@@ -20,6 +20,7 @@ from PIL import Image
 from diffusers import ControlNetModel, DiffusionPipeline
 from huggingface_hub import hf_hub_download, snapshot_download
 from insightface.app import FaceAnalysis
+# from transformers.convert_slow_tokenizers_checkpoints_to_fast import parser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]: %(message)s")
 logger = logging.getLogger("InstantIDAdapter")
@@ -133,6 +134,8 @@ def main() -> None:
     parser.add_argument("--controlnet_conditioning_scale", type=float, default=0.8)
     parser.add_argument("--num_inference_steps", type=int, default=20)
     parser.add_argument("--guidance_scale", type=float, default=5.0)
+    parser.add_argument("--width", type=int, default=1024)
+    parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--seed", type=int, default=None)
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -160,13 +163,43 @@ def main() -> None:
     if args.seed is not None:
         generator = torch.Generator(device=device).manual_seed(args.seed)
     kps_image = draw_kps(Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)), face["kps"])
+    # result = pipe(
+    #     prompt=args.prompt, negative_prompt=args.negative_prompt,
+    #     image_embeds=face["embedding"], image=kps_image,
+    #     controlnet_conditioning_scale=float(args.controlnet_conditioning_scale),
+    #     num_inference_steps=args.num_inference_steps, guidance_scale=float(args.guidance_scale),
+    #     generator=generator,
+    # ).images[0]
+
+    prompt = (
+    "a realistic high-quality studio portrait photograph of a person, "
+    "head and shoulders, looking at the camera, centered composition, "
+    "natural skin texture, sharp focus, soft professional lighting, "
+    "neutral plain background"
+    )
+
+    negative_prompt = (
+        "lowres, low quality, worst quality, blurry, out of focus, "
+        "abstract, glitch, distorted, deformed, disfigured, mutated, "
+        "bad anatomy, malformed face, deformed eyes, cross-eyed, "
+        "extra face, multiple faces, duplicate, cropped face, "
+        "cartoon, anime, illustration, painting, 3d render, "
+        "text, watermark, logo, frame"
+    )   
+
     result = pipe(
-        prompt=args.prompt, negative_prompt=args.negative_prompt,
-        image_embeds=face["embedding"], image=kps_image,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        image_embeds=face["embedding"],
+        image=kps_image,
+        width=args.width,
+        height=args.height,
         controlnet_conditioning_scale=float(args.controlnet_conditioning_scale),
-        num_inference_steps=args.num_inference_steps, guidance_scale=float(args.guidance_scale),
+        num_inference_steps=args.num_inference_steps,
+        guidance_scale=float(args.guidance_scale),
         generator=generator,
     ).images[0]
+
     output = Path(args.output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     result.save(output)

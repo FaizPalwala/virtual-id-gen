@@ -57,8 +57,19 @@ cd "$TMPDIR/repo/src"
 
 # Execute the pipeline.
 # We dynamically override dataset.data_root so Hydra knows exactly where the TMPDIR data is.
-python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
-    > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
+# python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
+#     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
+
+python src/instantid_adapter.py \
+  --id_image ../data/processed/SFHQ_pt1_00000006_face.jpg \
+  --style_image ../data/processed/SFHQ_pt1_00000226_face.jpg \
+  --output_path ../data/tmp \
+  --seed 42 \
+  --width 1024 \
+  --height 1024 \
+  --num_inference_steps 30 \
+  --guidance_scale 5.0
+    > "$REPO_DIR/logs/trial_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
 
