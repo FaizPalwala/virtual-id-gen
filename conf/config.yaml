@@ -21,7 +21,7 @@ pipeline:
 
   generator_cmd: >-
     python
-    src/instantid_adapter.py
+    instantid_adapter.py
     --id_image {id_image}
     --style_image {style_image}
     --output_path {output_path}
