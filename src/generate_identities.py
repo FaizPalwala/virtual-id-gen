@@ -6,6 +6,7 @@ identities, and validates outputs using ArcFace similarity and blur thresholds.
 """
 from __future__ import annotations
 
+from collections import Counter
 import json
 import logging
 import random
