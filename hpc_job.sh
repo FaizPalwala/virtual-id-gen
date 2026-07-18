@@ -61,9 +61,9 @@ cd "$TMPDIR/repo/src"
 #     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
 
 python instantid_adapter.py \
-  --id_image ../data/processed/SFHQ_pt1_00000006_face.jpg \
-  --style_image ../data/processed/SFHQ_pt1_00000226_face.jpg \
-  --output_path ../data/tmp \
+  --id_image ../../data/processed/SFHQ_pt1_00000006_face.jpg \
+  --style_image ../../data/processed/SFHQ_pt1_00000226_face.jpg \
+  --output_path ../../data/tmp \
   --seed 42 \
   --width 1024 \
   --height 1024 \
