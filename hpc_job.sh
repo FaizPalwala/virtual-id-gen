@@ -60,7 +60,7 @@ cd "$TMPDIR/repo/src"
 # python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
 #     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
 
-python src/instantid_adapter.py \
+python instantid_adapter.py \
   --id_image ../data/processed/SFHQ_pt1_00000006_face.jpg \
   --style_image ../data/processed/SFHQ_pt1_00000226_face.jpg \
   --output_path ../data/tmp \
