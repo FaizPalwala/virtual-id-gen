@@ -20,8 +20,8 @@ pipeline:
   skip_vis: false
 
   generator_cmd: >-
-    /Users/faiz/Desktop/Projects/virtual-id-gen/.conda/bin/python
-    /Users/faiz/Desktop/Projects/virtual-id-gen/src/instantid_adapter.py
+    python
+    src/instantid_adapter.py
     --id_image {id_image}
     --style_image {style_image}
     --output_path {output_path}
