@@ -1,40 +1,28 @@
-# conf/config.yaml
 defaults:
   - _self_
-
 dataset:
-  data_root: "../data"
-  n_identities: 400
-  images_per_identity: 40
-  candidates_per_identity: 70
-  n_forget: 40
-  n_test: 60
+  dataroot: ../data
+  part: 1
+  nidentities: 400
+  imagesperidentity: 40
+  candidatesperidentity: 80
+  nforget: 40
+  ntest: 60
   seed: 42
-
 pipeline:
-  dcface_root: /Users/faiz/Desktop/Apps/dcface/dcface
-  max_images: 30000
-  ctx_id: 0
-  min_similarity: 0.45
-  blur_threshold: 80.0
-  skip_vis: false
-
-  generator_cmd: >-
-    python
-    instantid_adapter.py
-    --id_image {id_image}
-    --style_image {style_image}
-    --output_path {output_path}
-    --seed {generation_seed}
-    --ip_adapter_scale 1.0
-    --controlnet_conditioning_scale 1.0
-    --num_inference_steps 25
-    --guidance_scale 5.0
-
-# Execution control
+  ctxid: 0
+  imgsize: 128
+  confthreshold: 0.85
+  blurthreshold: 80.0
+  min_similarity_raw: 0.40
+  min_similarity_final: 0.45
+  generatorcmd: >-
+    python instantidadapter.py --idimage {idimage} --outputpath {outputpath}
+    --seed {generationseed} --prompt "{prompt}" --width 1024 --height 1024
+    --numinferencesteps 30 --guidancescale 5.0
 steps:
-  download: true
-  preprocess: true
+  download: false
   generate: true
+  preprocess: true
   extract: true
   build: true
