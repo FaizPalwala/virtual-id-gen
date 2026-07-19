@@ -24,7 +24,7 @@ def main(cfg: DictConfig) -> None:
 
         download_sfhq(cfg.dataset.part, str(raw))
     if cfg.steps.generate:
-        from generateidentities import generate_identities
+        from generate_identities import generate_identities
 
         generate_identities(
             str(raw),

@@ -56,9 +56,9 @@ echo "[$(date)] Starting Phase 1 Data Generation..."
 cd "$TMPDIR/repo/src"
 
 # Execute the pipeline.
-# We dynamically override dataset.data_root so Hydra knows exactly where the TMPDIR data is.
-# python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
-#     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
+# We dynamically override dataset.dataroot so Hydra knows exactly where the TMPDIR data is.
+python main.py --config-name step3_generate dataset.dataroot="$TMPDIR/data" \
+    > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
 
 # python instantid_adapter.py \
 #   --id_image ../../data/test/source.jpg \
@@ -69,21 +69,21 @@ cd "$TMPDIR/repo/src"
 #   --height 1024 \
 #   --num_inference_steps 30 \
 #   --guidance_scale 5.0 \
-for seed in 42 43 44 45
-do
-    python instantid_adapter.py \
-        --id_image ../../data/test/source.jpg \
-        --output_path "../../data/test/grid_${seed}.jpg" \
-        --seed "${seed}" \
-        --width 1024 \
-        --height 1024 \
-        --num_inference_steps 35 \
-        --guidance_scale 5.5 \
-        --ip_adapter_scale 0.90 \
-        --controlnet_conditioning_scale 0.80 \
-        --prompt "RAW photo, realistic, editorial headshot, soft daylight, natural skin texture, sharp eyes, DSLR photograph" \
-        --negative_prompt "painting, illustration, CGI, 3D render, monochrome, grayscale, desaturated, blurry, deformed, text, watermark"
-done > "${REPO_DIR}/logs/trial_${SLURM_JOB_ID}.log" 2>&1
+# for seed in 42 43 44 45
+# do
+#     python instantid_adapter.py \
+#         --id_image ../../data/test/source.jpg \
+#         --output_path "../../data/test/grid_${seed}.jpg" \
+#         --seed "${seed}" \
+#         --width 1024 \
+#         --height 1024 \
+#         --num_inference_steps 35 \
+#         --guidance_scale 5.5 \
+#         --ip_adapter_scale 0.90 \
+#         --controlnet_conditioning_scale 0.80 \
+#         --prompt "RAW photo, realistic, editorial headshot, soft daylight, natural skin texture, sharp eyes, DSLR photograph" \
+#         --negative_prompt "painting, illustration, CGI, 3D render, monochrome, grayscale, desaturated, blurry, deformed, text, watermark"
+# done > "${REPO_DIR}/logs/trial_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
 
