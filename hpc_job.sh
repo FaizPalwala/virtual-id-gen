@@ -72,8 +72,8 @@ cd "$TMPDIR/repo/src"
 for seed in 42 43 44 45
 do
     python instantid_adapter.py \
-        --id_image ../../data/trial/source.jpg \
-        --output_path "../../data/grid_${seed}.jpg" \
+        --id_image ../../data/test/source.jpg \
+        --output_path "../../data/test/grid_${seed}.jpg" \
         --seed "${seed}" \
         --width 1024 \
         --height 1024 \
