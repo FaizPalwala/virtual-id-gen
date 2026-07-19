@@ -60,16 +60,30 @@ cd "$TMPDIR/repo/src"
 # python main.py --config-name step3_generate dataset.data_root="$TMPDIR/data" \
 #     > "$REPO_DIR/logs/datagen_execution_${SLURM_JOB_ID}.log" 2>&1
 
-python instantid_adapter.py \
-  --id_image ../../data/test/source.jpg \
-  --style_image ../../data/test/style.jpg \
-  --output_path ../../data/test/output.jpg \
-  --seed 42 \
-  --width 1024 \
-  --height 1024 \
-  --num_inference_steps 30 \
-  --guidance_scale 5.0 \
-    > "$REPO_DIR/logs/trial_${SLURM_JOB_ID}.log" 2>&1
+# python instantid_adapter.py \
+#   --id_image ../../data/test/source.jpg \
+#   --style_image ../../data/test/style.jpg \
+#   --output_path ../../data/test/output.jpg \
+#   --seed 42 \
+#   --width 1024 \
+#   --height 1024 \
+#   --num_inference_steps 30 \
+#   --guidance_scale 5.0 \
+for seed in 42 43 44 45
+do
+    python instantid_adapter.py \
+        --id_image ../../data/trial/source.jpg \
+        --output_path "../../data/grid_${seed}.jpg" \
+        --seed "${seed}" \
+        --width 1024 \
+        --height 1024 \
+        --num_inference_steps 35 \
+        --guidance_scale 5.5 \
+        --ip_adapter_scale 0.90 \
+        --controlnet_conditioning_scale 0.80 \
+        --prompt "RAW photo, realistic, editorial headshot, soft daylight, natural skin texture, sharp eyes, DSLR photograph" \
+        --negative_prompt "painting, illustration, CGI, 3D render, monochrome, grayscale, desaturated, blurry, deformed, text, watermark"
+done > "${REPO_DIR}/logs/trial_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
 
