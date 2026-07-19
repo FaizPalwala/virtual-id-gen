@@ -17,7 +17,7 @@ pipeline:
   min_similarity_raw: 0.40
   min_similarity_final: 0.45
   generatorcmd: >-
-    python instantidadapter.py --idimage {idimage} --outputpath {outputpath}
+    python instantid_adapter.py --idimage {idimage} --outputpath {outputpath}
     --seed {generationseed} --prompt "{prompt}"
     --negativeprompt "{negativeprompt}" --width 1024 --height 1024
     --num-inference-steps 35 --guidance-scale 5
