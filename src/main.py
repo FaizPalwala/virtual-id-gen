@@ -31,10 +31,10 @@ def main(cfg: DictConfig) -> None:
             str(identities),
             cfg.dataset.nidentities,
             cfg.dataset.candidatesperidentity,
-            cfg.pipeline.generatorcmd,
             cfg.pipeline.ctxid,
             cfg.dataset.seed,
             cfg.pipeline.min_similarity_raw,
+            dict(cfg.pipeline.instantid),
         )
     if cfg.steps.preprocess:
         from preprocess import preprocess_identity_candidates
