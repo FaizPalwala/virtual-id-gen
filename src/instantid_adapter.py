@@ -269,16 +269,16 @@ class InstantIDGeneratorSession:
                 f"{self.runtime.device!r}. Check the Slurm allocation and "
                 "CUDA-enabled PyTorch installation."
             )
-        import onnxruntime as ort
+        # import onnxruntime as ort
 
-        if (
-            self.runtime.device == "cuda"
-            and "CUDAExecutionProvider" not in ort.get_available_providers()
-        ):
-            raise RuntimeError(
-                "ONNX Runtime lacks CUDAExecutionProvider. Available: "
-                f"{ort.get_available_providers()}. Install onnxruntime-gpu."
-            )
+        # if (
+        #     self.runtime.device == "cuda"
+        #     and "CUDAExecutionProvider" not in ort.get_available_providers()
+        # ):
+        #     raise RuntimeError(
+        #         "ONNX Runtime lacks CUDAExecutionProvider. Available: "
+        #         f"{ort.get_available_providers()}. Install onnxruntime-gpu."
+        #     )
         from insightface.app import FaceAnalysis
         from diffusers import ControlNetModel, DiffusionPipeline
 
