@@ -1,12 +1,14 @@
-"""Generate one identity-preserving image with the InstantID SDXL pipeline.
+"""
+instantid_adapter.py
+InstantID SDXL adapter for generating identity-preserving images from a seed.
+Generate one identity-preserving image with the InstantID SDXL pipeline.
 
 The adapter is intentionally a small CLI boundary around the current Diffusers
 InstantID community pipeline.  It accepts both hyphenated and underscore CLI
-options so it can be used directly and from the dataset pipeline.  It does not
-require DCFace or a style image.
+options so it can be used directly and from the dataset pipeline.  
 
 Example:
-    python instantidadapter.py --idimage seed.jpg --outputpath output.png \
+    python instantid_adapter.py --idimage seed.jpg --outputpath output.png \
         --prompt "studio headshot, three-quarter view" --seed 42
 """
 from __future__ import annotations
@@ -215,84 +217,199 @@ def patch_legacy_instantid_check_inputs(pipe) -> bool:
     return True
 
 
-def build_pipeline(args: argparse.Namespace, runtime: RuntimeConfig):
-    """Load ControlNet, the InstantID community pipeline, and IP-Adapter weights."""
-    from diffusers import ControlNetModel, DiffusionPipeline
+@dataclass(frozen=True)
+class EncodedIdentity:
+    """Cached InstantID conditioning derived once from a source seed image."""
 
-    adapter_path, controlnet_path = get_instantid_paths(args.cache_dir)
-    controlnet = ControlNetModel.from_pretrained(
-        controlnet_path, torch_dtype=runtime.dtype
-    )
-    pipeline = DiffusionPipeline.from_pretrained(
-        args.base_model,
-        controlnet=controlnet,
-        torch_dtype=runtime.dtype,
-        custom_pipeline="pipeline_stable_diffusion_xl_instantid",
-    ).to(runtime.device)
-    patch_legacy_instantid_check_inputs(pipeline)
-    pipeline.load_ip_adapter_instantid(adapter_path)
-    pipeline.set_ip_adapter_scale(float(args.ip_adapter_scale))
-    return pipeline
+    source_path: str
+    face_embedding: np.ndarray
+    keypoint_image: Image.Image
 
 
-def make_generator(seed: int | None, device: str):
-    """Return a reproducibly seeded Torch generator, or None for stochastic runs."""
-    if seed is None:
-        return None
-    import torch
-
-    return torch.Generator(device=device).manual_seed(seed)
-
-
-def validate_arguments(args: argparse.Namespace) -> None:
-    """Fail early for configurations that SDXL cannot satisfy."""
-    if args.width <= 0 or args.height <= 0:
-        raise ValueError("width and height must be positive.")
-    if args.width % 8 or args.height % 8:
-        raise ValueError("width and height must be divisible by 8.")
-    if args.num_inference_steps <= 0:
+def validate_generation_settings(
+    width: int,
+    height: int,
+    steps: int,
+    ip_adapter_scale: float,
+    controlnet_scale: float,
+) -> None:
+    """Fail early for image dimensions and conditioning values SDXL cannot use."""
+    if width <= 0 or height <= 0 or width % 8 or height % 8:
+        raise ValueError("width and height must be positive and divisible by 8.")
+    if steps <= 0:
         raise ValueError("num_inference_steps must be positive.")
-    if args.ip_adapter_scale < 0 or args.controlnet_conditioning_scale < 0:
+    if ip_adapter_scale < 0 or controlnet_scale < 0:
         raise ValueError("conditioning scales must be non-negative.")
 
 
-def generate_image(args: argparse.Namespace) -> Path:
-    """Generate and save one InstantID image from a full-resolution seed image."""
-    validate_arguments(args)
-    runtime = get_runtime_config()
-    LOGGER.info("Using device=%s, dtype=%s", runtime.device, runtime.dtype)
-    source = Path(args.idimage).expanduser().resolve()
-    image_bgr = cv2.imread(str(source))
-    if image_bgr is None:
-        raise FileNotFoundError(source)
-    from insightface.app import FaceAnalysis
+class InstantIDGeneratorSession:
+    """Long-lived InstantID worker that loads all models once per process.
 
-    analyser = FaceAnalysis(
-        name="antelopev2",
-        root=get_antelope_root(args.cache_dir),
-        providers=runtime.providers,
+    Construct one session for a Slurm generation job.  Call ``encode_identity``
+    once per source seed, then ``generate`` for its many candidate variations.
+    This avoids repeatedly starting Python and reloading SDXL, ControlNet,
+    InstantID, and InsightFace for every generated candidate.
+    """
+
+    def __init__(
+        self,
+        base_model: str = DEFAULT_BASE_MODEL,
+        ip_adapter_scale: float = 0.90,
+        controlnet_conditioning_scale: float = 0.80,
+        cache_dir: Path | None = None,
+        require_cuda: bool = True,
+    ):
+        validate_generation_settings(
+            8, 8, 1, ip_adapter_scale, controlnet_conditioning_scale
+        )
+        self.runtime = get_runtime_config()
+        if require_cuda and self.runtime.device != "cuda":
+            raise RuntimeError(
+                "CUDA is required for generation but PyTorch selected "
+                f"{self.runtime.device!r}. Check the Slurm allocation and "
+                "CUDA-enabled PyTorch installation."
+            )
+        import onnxruntime as ort
+
+        if (
+            self.runtime.device == "cuda"
+            and "CUDAExecutionProvider" not in ort.get_available_providers()
+        ):
+            raise RuntimeError(
+                "ONNX Runtime lacks CUDAExecutionProvider. Available: "
+                f"{ort.get_available_providers()}. Install onnxruntime-gpu."
+            )
+        from insightface.app import FaceAnalysis
+        from diffusers import ControlNetModel, DiffusionPipeline
+
+        self.face_ctx_id = 0 if self.runtime.device == "cuda" else -1
+        self.controlnet_conditioning_scale = float(controlnet_conditioning_scale)
+        self.analyser = FaceAnalysis(
+            name="antelopev2",
+            root=get_antelope_root(cache_dir),
+            providers=self.runtime.providers,
+        )
+        adapter_path, controlnet_path = get_instantid_paths(cache_dir)
+        controlnet = ControlNetModel.from_pretrained(
+            controlnet_path, torch_dtype=self.runtime.dtype
+        )
+        self.pipeline = DiffusionPipeline.from_pretrained(
+            base_model,
+            controlnet=controlnet,
+            torch_dtype=self.runtime.dtype,
+            custom_pipeline="pipeline_stable_diffusion_xl_instantid",
+        ).to(self.runtime.device)
+        patch_legacy_instantid_check_inputs(self.pipeline)
+        self.pipeline.load_ip_adapter_instantid(adapter_path)
+        self.pipeline.set_ip_adapter_scale(float(ip_adapter_scale))
+        LOGGER.info(
+            "Persistent InstantID session ready: device=%s, dtype=%s",
+            self.runtime.device,
+            self.runtime.dtype,
+        )
+
+    def encode_identity(self, source_path: str | Path) -> EncodedIdentity:
+        """Detect one seed face and cache its embedding and landmark image."""
+        source = Path(source_path).expanduser().resolve()
+        image_bgr = cv2.imread(str(source))
+        if image_bgr is None:
+            raise FileNotFoundError(source)
+        face = detect_primary_face(
+            self.analyser, image_bgr, str(source), self.face_ctx_id
+        )
+        rgb_image = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+        return EncodedIdentity(
+            str(source),
+            np.asarray(face.embedding, dtype=np.float32),
+            draw_keypoints(rgb_image, face.kps),
+        )
+
+    def generate(
+        self,
+        identity: EncodedIdentity,
+        output_path: str | Path,
+        *,
+        prompt: str,
+        negative_prompt: str,
+        seed: int,
+        width: int = 1024,
+        height: int = 1024,
+        num_inference_steps: int = 35,
+        guidance_scale: float = 5.5,
+    ) -> Path:
+        """Generate one candidate without reinitialising the loaded models."""
+        validate_generation_settings(
+            width, height, num_inference_steps, 0.0, self.controlnet_conditioning_scale
+        )
+        import torch
+
+        generator = torch.Generator(device=self.runtime.device).manual_seed(seed)
+        with torch.inference_mode():
+            result = self.pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                image_embeds=identity.face_embedding,
+                image=identity.keypoint_image,
+                width=width,
+                height=height,
+                controlnet_conditioning_scale=self.controlnet_conditioning_scale,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=float(guidance_scale),
+                generator=generator,
+            ).images[0]
+        output = Path(output_path).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        result.save(output)
+        return output
+
+    def close(self) -> None:
+        """Release model references and return unused CUDA memory to the driver."""
+        if hasattr(self, "pipeline"):
+            del self.pipeline
+        if hasattr(self, "analyser"):
+            del self.analyser
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def validate_arguments(args: argparse.Namespace) -> None:
+    """Validate CLI settings with the same rules used by a persistent session."""
+    validate_generation_settings(
+        args.width,
+        args.height,
+        args.num_inference_steps,
+        args.ip_adapter_scale,
+        args.controlnet_conditioning_scale,
     )
-    face = detect_primary_face(analyser, image_bgr, str(source), args.face_ctx_id)
-    pipeline = build_pipeline(args, runtime)
-    rgb_image = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
-    keypoint_image = draw_keypoints(rgb_image, face.kps)
-    result = pipeline(
-        prompt=args.prompt,
-        negative_prompt=args.negative_prompt,
-        image_embeds=face.embedding,
-        image=keypoint_image,
-        width=args.width,
-        height=args.height,
-        controlnet_conditioning_scale=float(args.controlnet_conditioning_scale),
-        num_inference_steps=args.num_inference_steps,
-        guidance_scale=float(args.guidance_scale),
-        generator=make_generator(args.seed, runtime.device),
-    ).images[0]
-    output = Path(args.outputpath).expanduser().resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    result.save(output)
-    LOGGER.info("Saved generated image to %s", output)
-    return output
+
+
+def generate_image(args: argparse.Namespace) -> Path:
+    """CLI-compatible one-image wrapper around the persistent session API."""
+    validate_arguments(args)
+    session = InstantIDGeneratorSession(
+        base_model=args.base_model,
+        ip_adapter_scale=args.ip_adapter_scale,
+        controlnet_conditioning_scale=args.controlnet_conditioning_scale,
+        cache_dir=args.cache_dir,
+        require_cuda=False,
+    )
+    try:
+        identity = session.encode_identity(args.idimage)
+        return session.generate(
+            identity,
+            args.outputpath,
+            prompt=args.prompt,
+            negative_prompt=args.negative_prompt,
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            num_inference_steps=args.num_inference_steps,
+            guidance_scale=args.guidance_scale,
+        )
+    finally:
+        session.close()
 
 
 def build_parser() -> argparse.ArgumentParser:

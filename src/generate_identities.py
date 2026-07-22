@@ -18,9 +18,6 @@ from __future__ import annotations
 import argparse
 import json
 import random
-import re
-import shlex
-import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -179,41 +176,15 @@ def build_variation_plan(count: int = 39) -> list[VariationSpec]:
     ]
 
 
-def invoke_generator(
-    command_template: str,
-    seed_path: Path,
-    output_path: Path,
-    generation_seed: int,
-    variation: VariationSpec,
-) -> None:
-    """Execute InstantID for one planned variation and require its output file."""
-    command = command_template.format(
-        idimage=seed_path.resolve(),
-        outputpath=output_path.resolve(),
-        generationseed=generation_seed,
-        prompt=variation.prompt(),
-        negativeprompt=NEGATIVE_PROMPT,
-    )
-    result = subprocess.run(
-        shlex.split(command), text=True, capture_output=True, check=False
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Generator failed for {seed_path}: {result.stderr[-2000:]}")
-    if not output_path.exists() or output_path.stat().st_size == 0:
-        raise RuntimeError(
-            f"Generator did not create a non-empty output at {output_path}"
-        )
-
-
 def generate_identities(
     rawdir: str,
     outputdir: str,
     nidentities: int = 400,
     candidatesperidentity: int = 39,
-    generatorcmd: str = "",
     ctxid: int = 0,
     randomstate: int = 42,
     min_similarity_raw: float = 0.40,
+    instantid_config: dict | None = None,
 ) -> str:
     """Generate planned candidate variants for each full-resolution source seed.
 
@@ -222,12 +193,9 @@ def generate_identities(
     Set the final processed cluster size to at most 39, or generate more than
     39 candidates if post-processing must retain 40 images per cluster.
     """
-    required = {"{idimage}", "{outputpath}", "{generationseed}", "{prompt}"}
-    placeholders = set(re.findall(r"\{[^}]+\}", generatorcmd))
-    if not required.issubset(placeholders):
-        raise ValueError(
-            "generatorcmd needs {idimage}, {outputpath}, {generationseed}, and {prompt}."
-        )
+    from instantid_adapter import InstantIDGeneratorSession
+
+    instantid_config = instantid_config or {}
     sources = get_image_paths(rawdir)
     if len(sources) < nidentities:
         raise ValueError(f"Need {nidentities} source images; found {len(sources)}.")
@@ -241,58 +209,87 @@ def generate_identities(
     variations = build_variation_plan(candidatesperidentity)
     app = load_arcface_model(ctxid)
     records: list[dict] = []
-    for cluster_id, seed_path in enumerate(
-        tqdm(sources[:nidentities], desc="Generating varied candidates")
-    ):
-        seed_image = cv2.imread(str(seed_path))
-        seed_embedding, _, _ = get_embedding_and_attributes(app, seed_image)
-        if seed_embedding is None:
-            raise RuntimeError(f"Seed has no detectable face: {seed_path}")
-        cluster_dir = candidates_root / f"identity_{cluster_id:03d}"
-        cluster_dir.mkdir(exist_ok=True)
-        for trial, variation in enumerate(variations):
-            generation_seed = randomstate + cluster_id * candidatesperidentity + trial
-            candidate_path = cluster_dir / f"candidate_{trial:03d}.png"
-            invoke_generator(
-                generatorcmd, seed_path, candidate_path, generation_seed, variation
-            )
-            image = cv2.imread(str(candidate_path))
-            embedding, _, _ = (
-                get_embedding_and_attributes(app, image)
-                if image is not None
-                else (None, None, None)
-            )
-            similarity = (
-                None
-                if embedding is None
-                else normalised_cosine_similarity(seed_embedding, embedding)
-            )
-            status = (
-                "accepted_raw"
-                if similarity is not None and similarity >= min_similarity_raw
-                else "rejected_raw"
-            )
-            stored_path = candidate_path
-            if status == "rejected_raw" and candidate_path.exists():
-                stored_path = (
-                    rejected_root / f"identity_{cluster_id:03d}_trial_{trial:03d}.png"
+    session = InstantIDGeneratorSession(
+        base_model=instantid_config.get("base_model")
+        or "stabilityai/stable-diffusion-xl-base-1.0",
+        ip_adapter_scale=float(instantid_config.get("ip_adapter_scale", 0.90)),
+        controlnet_conditioning_scale=float(
+            instantid_config.get("controlnet_conditioning_scale", 0.80)
+        ),
+        cache_dir=Path(instantid_config["cache_dir"])
+        if instantid_config.get("cache_dir")
+        else None,
+        require_cuda=bool(instantid_config.get("require_cuda", True)),
+    )
+    try:
+        for cluster_id, seed_path in enumerate(
+            tqdm(sources[:nidentities], desc="Generating varied candidates")
+        ):
+            seed_image = cv2.imread(str(seed_path))
+            seed_embedding, _, _ = get_embedding_and_attributes(app, seed_image)
+            if seed_embedding is None:
+                raise RuntimeError(f"Seed has no detectable face: {seed_path}")
+            identity = session.encode_identity(seed_path)
+            cluster_dir = candidates_root / f"identity_{cluster_id:03d}"
+            cluster_dir.mkdir(exist_ok=True)
+            for trial, variation in enumerate(variations):
+                generation_seed = (
+                    randomstate + cluster_id * candidatesperidentity + trial
                 )
-                candidate_path.replace(stored_path)
-            records.append(
-                {
-                    "identityid": cluster_id,
-                    "clusterid": cluster_id,
-                    "trial": trial,
-                    "seedpath": str(seed_path),
-                    "generationseed": generation_seed,
-                    "prompt": variation.prompt(),
-                    "negative_prompt": NEGATIVE_PROMPT,
-                    "raw_candidatepath": str(stored_path),
-                    "raw_arcface_similarity": similarity,
-                    "raw_status": status,
-                    **asdict(variation),
-                }
-            )
+                candidate_path = cluster_dir / f"candidate_{trial:03d}.png"
+                session.generate(
+                    identity,
+                    candidate_path,
+                    prompt=variation.prompt(),
+                    negative_prompt=NEGATIVE_PROMPT,
+                    seed=generation_seed,
+                    width=int(instantid_config.get("width", 1024)),
+                    height=int(instantid_config.get("height", 1024)),
+                    num_inference_steps=int(
+                        instantid_config.get("num_inference_steps", 35)
+                    ),
+                    guidance_scale=float(instantid_config.get("guidance_scale", 5.5)),
+                )
+                image = cv2.imread(str(candidate_path))
+                embedding, _, _ = (
+                    get_embedding_and_attributes(app, image)
+                    if image is not None
+                    else (None, None, None)
+                )
+                similarity = (
+                    None
+                    if embedding is None
+                    else normalised_cosine_similarity(seed_embedding, embedding)
+                )
+                status = (
+                    "accepted_raw"
+                    if similarity is not None and similarity >= min_similarity_raw
+                    else "rejected_raw"
+                )
+                stored_path = candidate_path
+                if status == "rejected_raw" and candidate_path.exists():
+                    stored_path = (
+                        rejected_root
+                        / f"identity_{cluster_id:03d}_trial_{trial:03d}.png"
+                    )
+                    candidate_path.replace(stored_path)
+                records.append(
+                    {
+                        "identityid": cluster_id,
+                        "clusterid": cluster_id,
+                        "trial": trial,
+                        "seedpath": str(seed_path),
+                        "generationseed": generation_seed,
+                        "prompt": variation.prompt(),
+                        "negative_prompt": NEGATIVE_PROMPT,
+                        "raw_candidatepath": str(stored_path),
+                        "raw_arcface_similarity": similarity,
+                        "raw_status": status,
+                        **asdict(variation),
+                    }
+                )
+    finally:
+        session.close()
     pd.DataFrame(records).to_csv(output / "raw_candidate_manifest.csv", index=False)
     summary = {
         "nidentities": nidentities,
@@ -318,7 +315,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=39,
     )
-    parser.add_argument("--generatorcmd", required=True)
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument("--randomstate", type=int, default=42)
     parser.add_argument("--minsimilarityraw", type=float, default=0.40)
@@ -332,7 +328,6 @@ if __name__ == "__main__":
         args.outputdir,
         args.nidentities,
         args.candidatesperidentity,
-        args.generatorcmd,
         args.ctxid,
         args.randomstate,
         args.minsimilarityraw,
