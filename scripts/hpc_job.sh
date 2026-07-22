@@ -20,17 +20,28 @@ module load cuda
 conda activate data_gen
 
 # ==========================================
-# 2. Path Variables
+# 2. Path Variables & Caching
 # ==========================================
 # SLURM_SUBMIT_DIR is the repo directory where you run sbatch
 REPO_DIR=$SLURM_SUBMIT_DIR
 
-# The data folder is one level up, alongside the repo
+# The data and cache folders are one level up, alongside the repo
 PARENT_DIR=$(dirname "$REPO_DIR")
 DATA_DIR="$PARENT_DIR/data"
+CACHE_DIR="$PARENT_DIR/model_cache"
 
 # Ensure the local data directory exists for syncing later
 mkdir -p "$DATA_DIR"
+
+# Optimization: Pin threads to prevent CPU thrashing
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+
+# Optimization: Redirect caches to persistent storage (avoids re-downloading heavy models)
+export HF_HOME="$CACHE_DIR/hf_cache"
+export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
+export INSIGHTFACE_HOME="$CACHE_DIR/insightface"
+mkdir -p "$HF_HOME" "$INSIGHTFACE_HOME"
 
 # ==========================================
 # 3. Staging (Copy IN to $TMPDIR)
@@ -48,6 +59,12 @@ cp -r "$REPO_DIR/"* "$TMPDIR/repo/"
 if [ "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
     cp -r "$DATA_DIR/"* "$TMPDIR/data/"
 fi
+
+# ==========================================
+# Preflight Check
+# ==========================================
+echo "[$(date)] Running GPU Preflight Check..."
+bash "$TMPDIR/repo/scripts/gpu_preflight.sh"
 
 # ==========================================
 # 4. Run the Data Generation
