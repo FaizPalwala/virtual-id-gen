@@ -10,7 +10,7 @@ facenet-pytorch>=2.5.3
 insightface>=0.7.3
 # if CPU-only, use the following instead
 # onnxruntime
-onnxruntime-gpu>=1.16
+onnxruntime-gpu
 kaggle>=1.5.16
 hydra-core>=1.3.2
 omegaconf>=2.3.0
