@@ -43,6 +43,10 @@ export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
 export INSIGHTFACE_HOME="$CACHE_DIR/insightface"
 mkdir -p "$HF_HOME" "$INSIGHTFACE_HOME"
 
+# Enable High-Speed Downloads
+export HF_TOKEN="hf_your_actual_token_here"
+export HF_HUB_ENABLE_HF_TRANSFER=1
+
 # ==========================================
 # 3. Staging (Copy IN to $TMPDIR)
 # ==========================================
