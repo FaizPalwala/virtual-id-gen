@@ -16,12 +16,17 @@ pipeline:
   blurthreshold: 80.0
   min_similarity_raw: 0.40
   min_similarity_final: 0.45
-  generatorcmd: >-
-    python instantid_adapter.py --idimage {idimage} --outputpath {outputpath}
-    --seed {generationseed} --prompt "{prompt}"
-    --negativeprompt "{negativeprompt}" --width 1024 --height 1024
-    --num-inference-steps 35 --guidance-scale 5
-    --ip-adapter-scale 0.90 --controlnet-conditioning-scale 0.80
+  instantid:
+    base_model: stabilityai/stable-diffusion-xl-base-1.0
+    width: 1024
+    height: 1024
+    num_inference_steps: 35
+    guidance_scale: 5.5
+    ip_adapter_scale: 0.90
+    controlnet_conditioning_scale: 0.80
+    cache_dir: null
+    require_cuda: true
+
 steps:
   download: false
   generate: true
