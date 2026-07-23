@@ -3,7 +3,7 @@
 # Slurm Resource Allocation
 # ==========================================
 #SBATCH --job-name=msc_datagen_phase1
-#SBATCH --time=24:00:00                  
+#SBATCH --time=2-00:00:00  # Request exactly 48 hours                  
 #SBATCH --partition=gpu                  
 #SBATCH --gres=gpu:1                     
 #SBATCH --cpus-per-task=8                

@@ -60,7 +60,9 @@ def get_runtime_config():
     if torch.cuda.is_available():
         return RuntimeConfig(
             device="cuda",
-            dtype=torch.float16,
+            # Commented out float16 because it can cause issues with some models; using float32 for stability
+            # dtype=torch.float16,
+            dtype=torch.float32,
             providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         )
     if torch.backends.mps.is_available():
