@@ -53,6 +53,33 @@ def get_embedding_and_attributes(app, image_bgr: np.ndarray):
         int(getattr(face, "gender", -1)),
     )
 
+def get_embedding_and_attributes_robust(app, image_bgr: np.ndarray, ctxid: int):
+    """Return largest-face attributes from an unaligned/raw image.
+
+    The standard extractor intentionally uses a 128-pixel detector for aligned
+    final crops.  Generation seeds are full-resolution portraits, so this
+    function retries larger detectors and reflected context before declaring a
+    seed unusable.  It does not mutate InsightFace face objects.
+    """
+    if image_bgr is None:
+        return None, None, None
+    height, width = image_bgr.shape[:2]
+    for ratio in (0.0, 0.25, 0.50):
+        pad_y, pad_x = int(height * ratio), int(width * ratio)
+        candidate = image_bgr if ratio == 0.0 else cv2.copyMakeBorder(
+            image_bgr, pad_y, pad_y, pad_x, pad_x, cv2.BORDER_REFLECT_101
+        )
+        for det_size in ((640, 640), (512, 512), (320, 320)):
+            app.prepare(ctx_id=ctxid, det_size=det_size)
+            faces = app.get(candidate)
+            if not faces:
+                continue
+            face = max(faces, key=lambda item: float(
+                (item.bbox[2] - item.bbox[0]) * (item.bbox[3] - item.bbox[1])
+            ))
+            embedding = np.asarray(face.normed_embedding, dtype=np.float32)
+            return embedding, int(getattr(face, "age", -1)), int(getattr(face, "gender", -1))
+    return None, None, None
 
 def age_to_group(age: int) -> int:
     """Map InsightFace's age estimate to the stable four-class proxy label."""

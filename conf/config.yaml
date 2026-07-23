@@ -4,11 +4,13 @@ dataset:
   dataroot: ../data
   part: 1
   nidentities: 400
-  imagesperidentity: 40
-  candidatesperidentity: 60
+  imagesperidentity: 39
+  candidatesperidentity: 39
   nforget: 40
   ntest: 60
   seed: 42
+  # null means consider all shuffled raw sources until target is reached
+  max_seed_attempts: null
 pipeline:
   ctxid: 0
   imgsize: 128

@@ -1,11 +1,5 @@
 """
 generate_identities.py
-Generate raw InstantID candidate pools from full-resolution SFHQ seeds.
-
-This stage deliberately does not create the final dataset manifest.  It records
-all candidate-level provenance in ``raw_candidate_manifest.csv``; the following
-preprocessing stage owns final selection and writes ``identitymanifest.csv``.
-
 Generate varied raw InstantID candidate pools from full-resolution SFHQ seeds.
 
 Each identity receives a deterministic variation plan.  A plan changes only
@@ -17,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -27,7 +22,12 @@ import pandas as pd
 from tqdm import tqdm
 
 from common import get_image_paths, normalised_cosine_similarity
-from extract_embeddings import get_embedding_and_attributes, load_arcface_model
+from extract_embeddings import (
+    get_embedding_and_attributes_robust,
+    load_arcface_model,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 PHOTOREALISM_PREFIX = (
     "RAW photo, photorealistic DSLR portrait of the same person, realistic "
@@ -185,30 +185,46 @@ def generate_identities(
     randomstate: int = 42,
     min_similarity_raw: float = 0.40,
     instantid_config: dict | None = None,
+    max_seed_attempts: int | None = None,
 ) -> str:
-    """Generate planned candidate variants for each full-resolution source seed.
+    """Generate candidate pools until exactly ``nidentities`` valid seeds exist.
 
-    ``candidatesperidentity=39`` means 39 *generated* images per seed.  The
-    source image is deliberately not copied into a virtual identity cluster.
-    Set the final processed cluster size to at most 39, or generate more than
-    39 candidates if post-processing must retain 40 images per cluster.
+    Source images are shuffled deterministically, then considered from a pool
+    larger than the requested identity count.  A source is skipped if either
+    robust ArcFace validation or InstantID seed encoding cannot find a face.
+    Generation stops immediately when ``nidentities`` clusters are completed.
+    It raises a useful error only when all available sources (or the optional
+    ``max_seed_attempts`` cap) are exhausted first.
     """
     from instantid_adapter import InstantIDGeneratorSession
+
+    if nidentities <= 0:
+        raise ValueError("nidentities must be positive.")
+    if candidatesperidentity <= 0:
+        raise ValueError("candidatesperidentity must be positive.")
+    if max_seed_attempts is not None and max_seed_attempts <= 0:
+        raise ValueError("max_seed_attempts must be positive when provided.")
 
     instantid_config = instantid_config or {}
     sources = get_image_paths(rawdir)
     if len(sources) < nidentities:
-        raise ValueError(f"Need {nidentities} source images; found {len(sources)}.")
+        raise ValueError(
+            f"Need at least {nidentities} source images; found {len(sources)}."
+        )
     rng = random.Random(randomstate)
     rng.shuffle(sources)
+    attempted_sources = sources[:max_seed_attempts] if max_seed_attempts else sources
+
     output = Path(outputdir)
     candidates_root = output / "candidates"
     rejected_root = output / "rejected"
     candidates_root.mkdir(parents=True, exist_ok=True)
     rejected_root.mkdir(parents=True, exist_ok=True)
     variations = build_variation_plan(candidatesperidentity)
-    app = load_arcface_model(ctxid)
+    validation_app = load_arcface_model(ctxid)
     records: list[dict] = []
+    skipped_seeds: list[dict] = []
+    completed = 0
     session = InstantIDGeneratorSession(
         base_model=instantid_config.get("base_model")
         or "stabilityai/stable-diffusion-xl-base-1.0",
@@ -222,14 +238,42 @@ def generate_identities(
         require_cuda=bool(instantid_config.get("require_cuda", True)),
     )
     try:
-        for cluster_id, seed_path in enumerate(
-            tqdm(sources[:nidentities], desc="Generating varied candidates")
-        ):
+        progress = tqdm(
+            attempted_sources, desc="Selecting seeds and generating candidates"
+        )
+        for attempt_index, seed_path in enumerate(progress, start=1):
+            if completed >= nidentities:
+                break
             seed_image = cv2.imread(str(seed_path))
-            seed_embedding, _, _ = get_embedding_and_attributes(app, seed_image)
+            seed_embedding, _, _ = get_embedding_and_attributes_robust(
+                validation_app, seed_image, ctxid
+            )
             if seed_embedding is None:
-                raise RuntimeError(f"Seed has no detectable face: {seed_path}")
-            identity = session.encode_identity(seed_path)
+                reason = "validation_face_not_detected"
+                LOGGER.warning("Skipping seed %s: %s", seed_path, reason)
+                skipped_seeds.append(
+                    {
+                        "seedpath": str(seed_path),
+                        "attempt": attempt_index,
+                        "reason": reason,
+                    }
+                )
+                continue
+            try:
+                identity = session.encode_identity(seed_path)
+            except (FileNotFoundError, ValueError) as error:
+                reason = f"instantid_seed_encoding_failed: {error}"
+                LOGGER.warning("Skipping seed %s: %s", seed_path, reason)
+                skipped_seeds.append(
+                    {
+                        "seedpath": str(seed_path),
+                        "attempt": attempt_index,
+                        "reason": reason,
+                    }
+                )
+                continue
+
+            cluster_id = completed
             cluster_dir = candidates_root / f"identity_{cluster_id:03d}"
             cluster_dir.mkdir(exist_ok=True)
             for trial, variation in enumerate(variations):
@@ -251,10 +295,8 @@ def generate_identities(
                     guidance_scale=float(instantid_config.get("guidance_scale", 5.5)),
                 )
                 image = cv2.imread(str(candidate_path))
-                embedding, _, _ = (
-                    get_embedding_and_attributes(app, image)
-                    if image is not None
-                    else (None, None, None)
+                embedding, _, _ = get_embedding_and_attributes_robust(
+                    validation_app, image, ctxid
                 )
                 similarity = (
                     None
@@ -279,6 +321,7 @@ def generate_identities(
                         "clusterid": cluster_id,
                         "trial": trial,
                         "seedpath": str(seed_path),
+                        "seed_attempt": attempt_index,
                         "generationseed": generation_seed,
                         "prompt": variation.prompt(),
                         "negative_prompt": NEGATIVE_PROMPT,
@@ -288,17 +331,40 @@ def generate_identities(
                         **asdict(variation),
                     }
                 )
+            completed += 1
+            progress.set_postfix(
+                completed=f"{completed}/{nidentities}", skipped=len(skipped_seeds)
+            )
     finally:
         session.close()
+
     pd.DataFrame(records).to_csv(output / "raw_candidate_manifest.csv", index=False)
+    pd.DataFrame(skipped_seeds, columns=("seedpath", "attempt", "reason")).to_csv(
+        output / "skipped_seed_manifest.csv", index=False
+    )
     summary = {
-        "nidentities": nidentities,
+        "requested_identities": nidentities,
+        "completed_identities": completed,
+        "seed_attempts": min(len(attempted_sources), completed + len(skipped_seeds)),
+        "available_source_images": len(sources),
+        "max_seed_attempts": max_seed_attempts,
+        "skipped_seeds": len(skipped_seeds),
         "generated_variants_per_identity": candidatesperidentity,
         "source_image_in_final_cluster": False,
         "randomstate": randomstate,
         "min_similarity_raw": min_similarity_raw,
     }
     (output / "generation_summary.json").write_text(json.dumps(summary, indent=2))
+    if completed < nidentities:
+        cap = (
+            f"the configured max_seed_attempts={max_seed_attempts}"
+            if max_seed_attempts
+            else "all available source images"
+        )
+        raise RuntimeError(
+            f"Completed {completed}/{nidentities} identities after exhausting {cap}. "
+            f"See {output / 'skipped_seed_manifest.csv'} for skipped seeds."
+        )
     return str(output)
 
 
@@ -318,6 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument("--randomstate", type=int, default=42)
     parser.add_argument("--minsimilarityraw", type=float, default=0.40)
+    parser.add_argument(
+        "--maxseedattempts",
+        type=int,
+        default=None,
+        help="Optional cap on shuffled raw seeds considered",
+    )
     return parser
 
 
@@ -331,4 +403,5 @@ if __name__ == "__main__":
         args.ctxid,
         args.randomstate,
         args.minsimilarityraw,
+        max_seed_attempts=args.maxseedattempts,
     )
