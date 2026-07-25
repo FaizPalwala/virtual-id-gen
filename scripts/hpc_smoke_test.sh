@@ -164,6 +164,15 @@ else
     echo "PASS: All $TOTAL candidate images have non-zero pixels"
 fi
 
-echo "Smoke test directory: $SMOKE_DATA/identities"
+# ==========================================
+# 6. Sync results back to persistent storage
+# ==========================================
+SMOKE_OUT="$DATA_DIR/smoke_${SLURM_JOB_ID}"
+mkdir -p "$SMOKE_OUT"
+echo "[$(date)] Syncing results to $SMOKE_OUT..."
+rsync -av "$IDENTITY_DIR/" "$SMOKE_OUT/" 2>&1 | tail -3
+echo "Results persisted at: $SMOKE_OUT"
+
+echo "Smoke test directory (tmp): $SMOKE_DATA/identities"
 echo "========================================="
 echo "[$(date)] Smoke test complete — PASS"
