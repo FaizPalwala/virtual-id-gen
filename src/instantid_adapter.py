@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import io
 import logging
 import math
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from types import MethodType
@@ -143,6 +145,8 @@ def detect_primary_face(
 ) -> Any:
     """Detect the largest face, retrying padded copies for tightly cropped seeds."""
     height, width = image_bgr.shape[:2]
+    # Silence InsightFace noisy ``set det-size`` stdout spam during detection.
+    _devnull = io.StringIO()
     for ratio in (0.0, 0.25, 0.50):
         padding_y, padding_x = int(height * ratio), int(width * ratio)
         candidate = (
@@ -158,8 +162,9 @@ def detect_primary_face(
             )
         )
         for det_size in ((640, 640), (320, 320)):
-            analyser.prepare(ctx_id=ctx_id, det_size=det_size)
-            faces = analyser.get(candidate)
+            with redirect_stdout(_devnull), redirect_stderr(_devnull):
+                analyser.prepare(ctx_id=ctx_id, det_size=det_size)
+                faces = analyser.get(candidate)
             if not faces:
                 continue
             # Never mutate InsightFace objects returned for a padded retry.
@@ -468,6 +473,7 @@ class InstantIDGeneratorSession:
                 num_inference_steps=num_inference_steps,
                 guidance_scale=float(guidance_scale),
                 generator=generator,
+                disable_progress_bar=True,
             ).images[0]
         output = Path(output_path).expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -508,6 +514,7 @@ class InstantIDGeneratorSession:
                 num_inference_steps=num_inference_steps,
                 guidance_scale=float(guidance_scale),
                 generator=generator,
+                disable_progress_bar=True,
             ).images[0]
         output = Path(output_path).expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)

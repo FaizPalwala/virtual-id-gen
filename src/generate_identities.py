@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import random
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -28,6 +29,19 @@ from extract_embeddings import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _fmt_duration(seconds: float) -> str:
+    """Format a duration in seconds as ``1h23m`` or ``45s``."""
+    if seconds < 0:
+        seconds = 0
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    if m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
 
 PHOTOREALISM_PREFIX = (
     "RAW photo, photorealistic DSLR portrait of the same person, realistic "
@@ -249,9 +263,16 @@ def generate_identities(
         )
 
         progress = tqdm(
-            attempted_sources, desc="Selecting seeds and generating candidates"
+            total=nidentities,
+            desc="Identities",
+            unit="id",
+            bar_format=(
+                "{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} "
+                "[{elapsed}<{remaining}, {rate_fmt}]"
+            ),
         )
-        for attempt_index, seed_path in enumerate(progress, start=1):
+        t_start = time.monotonic()
+        for attempt_index, seed_path in enumerate(attempted_sources, start=1):
             if completed >= nidentities:
                 break
             seed_image = cv2.imread(str(seed_path))
@@ -327,8 +348,19 @@ def generate_identities(
                     }
                 )
             completed += 1
-            progress.set_postfix(
-                completed=f"{completed}/{nidentities}", skipped=len(skipped_seeds)
+            progress.update(1)
+            elapsed = time.monotonic() - t_start
+            rate = elapsed / completed if completed else 0
+            LOGGER.info(
+                "identity %3d/%-3d | seed=%s | skipped=%d | elapsed=%s | "
+                "%.1f min/id | ETA %s",
+                completed,
+                nidentities,
+                Path(seed_path).name,
+                len(skipped_seeds),
+                _fmt_duration(elapsed),
+                rate / 60,
+                _fmt_duration(rate * (nidentities - completed)),
             )
     finally:
         session.close()
