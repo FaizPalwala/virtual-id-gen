@@ -456,7 +456,6 @@ class InstantIDGeneratorSession:
             device_type=self.runtime.device, dtype=self.runtime.dtype
         ):
             result = self.pipeline(
-                prompt=prompt_text,
                 prompt_embeds=embeds["prompt_embeds"],
                 negative_prompt_embeds=embeds["negative_prompt_embeds"],
                 pooled_prompt_embeds=embeds["pooled_prompt_embeds"],
