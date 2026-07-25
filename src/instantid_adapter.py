@@ -463,9 +463,7 @@ class InstantIDGeneratorSession:
         embeds = prompt_embeddings[prompt_text]
 
         generator = torch.Generator(device=self.runtime.device).manual_seed(seed)
-        with torch.inference_mode(), torch.autocast(
-            device_type=self.runtime.device, dtype=self.runtime.dtype
-        ):
+        with torch.inference_mode():
             result = self.pipeline(
                 prompt_embeds=embeds["prompt_embeds"],
                 negative_prompt_embeds=embeds["negative_prompt_embeds"],
@@ -508,9 +506,7 @@ class InstantIDGeneratorSession:
         import torch
 
         generator = torch.Generator(device=self.runtime.device).manual_seed(seed)
-        with torch.inference_mode(), torch.autocast(
-            device_type=self.runtime.device, dtype=self.runtime.dtype
-        ):
+        with torch.inference_mode():
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
