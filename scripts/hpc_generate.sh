@@ -1,25 +1,26 @@
 #!/bin/bash
 # ==========================================
-# Slurm Resource Allocation — Multi-GPU Job Array
+# hpc_generate.sh — Phase 1: Identity Generation (4-way GPU array)
 # ==========================================
-#SBATCH --job-name=msc_datagen_phase1
-#SBATCH --time=2-00:00:00                 # Request exactly 48 hours
+#SBATCH --job-name=msc_generate
+#SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1                       # 1 GPU per array task (4 in parallel)
-#SBATCH --array=0-3                        # Run 4 identical copies, split by shard
+#SBATCH --array=0-3                        # 4 shards: identities are split evenly
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
 # ------------------------------------------------------------------
-# Each array task handles 1/4th of the identities.
-# The randomstate seeds: 42, 44, 46, 48 (one per shard).
+# Each array task generates 100 identities with a unique random seed.
 #
 # Shard 0 (seed=42): identities   0– 99
 # Shard 1 (seed=44): identities 100–199
 # Shard 2 (seed=46): identities 200–299
 # Shard 3 (seed=48): identities 300–399
+#
+# Output lands under $DATA_DIR/shard_${TASK_ID}/ for later merging.
 # ------------------------------------------------------------------
 
 # ==========================================
@@ -33,7 +34,7 @@ conda activate data_gen
 # ==========================================
 # 2. Path Variables & Caching
 # ==========================================
-REPO_DIR=$SLURM_SUBMIT_DIR
+REPO_DIR="$SLURM_SUBMIT_DIR"
 PARENT_DIR=$(dirname "$REPO_DIR")
 DATA_DIR="$PARENT_DIR/data"
 CACHE_DIR="$PARENT_DIR/model_cache"
@@ -59,7 +60,7 @@ SHARD_TMPDIR="$TMPDIR/shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_TMPDIR/repo" "$SHARD_TMPDIR/data"
 
 # ==========================================
-# 3. Staging (Copy IN to $TMPDIR)
+# 3. Staging (Copy IN → node-local scratch)
 # ==========================================
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Staging to node-local scratch..."
 
@@ -76,41 +77,40 @@ echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Running GPU Preflight..."
 bash "$SHARD_TMPDIR/repo/scripts/gpu_preflight.sh"
 
 # ==========================================
-# 5. Run the Data Generation (one shard)
+# 5. Generate 100 Identities (one shard)
 # ==========================================
-echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Starting Phase 1 Data Generation..."
+echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Starting identity generation..."
 
 SHARD_SEED=$((42 + SLURM_ARRAY_TASK_ID * 2))
 
 cd "$SHARD_TMPDIR/repo/src"
 
-# Generate 100 identities per shard with a unique random seed.
-# The seeds 42,44,46,48 produce non-overlapping shuffles of the SFHQ source pool.
-#
-# Each shard writes into its own dataroot to avoid overwriting.
-# After the job, merge with: python scripts/merge_shards.py
+# Each shard writes into its own dataroot so the four array tasks don't
+# overwrite each other.  After the job finishes, merge with hpc_merge.sh.
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_DATA/raw"
-# Source images are shared — symlink or copy once
-if [ -d "$SHARD_TMPDIR/data/raw" ] && [ ! -d "$SHARD_DATA/raw" ] || [ -z "$(ls -A "$SHARD_DATA/raw" 2>/dev/null)" ]; then
-    cp -r "$SHARD_TMPDIR/data/raw/." "$SHARD_DATA/raw/"
+
+# Source images are shared — copy once per shard
+if [ -d "$SHARD_TMPDIR/data/raw" ]; then
+    if [ ! -d "$SHARD_DATA/raw" ] || [ -z "$(ls -A "$SHARD_DATA/raw" 2>/dev/null)" ]; then
+        cp -r "$SHARD_TMPDIR/data/raw/." "$SHARD_DATA/raw/"
+    fi
 fi
 
 python main.py --config-name step3_generate \
     dataset.dataroot="$SHARD_DATA" \
     dataset.nidentities=100 \
     dataset.seed="$SHARD_SEED" \
-    > "$REPO_DIR/logs/datagen_shard_${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.log" 2>&1
+    > "$REPO_DIR/logs/generate_shard_${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
 
 # ==========================================
-# 6. Data Sync (Copy OUT to Shared Storage)
+# 6. Data Sync (Copy OUT → shared storage)
 # ==========================================
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Generation finished (exit $EXIT_CODE)"
 echo "[$(date)] Syncing data back..."
 
-# Sync each shard's output under its own subdirectory for later merging
 SHARD_OUT="$DATA_DIR/shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_OUT"
 rsync -av "$SHARD_DATA/identities/" "$SHARD_OUT/"
