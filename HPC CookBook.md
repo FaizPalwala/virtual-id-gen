@@ -11,12 +11,28 @@ module load miniforge
 conda create -n data_gen python=3.10 -y
 conda activate data_gen
 
-# 3. Install PyTorch via Conda (matches your torch>=2.0 and torchvision>=0.15 requirements)
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
+# 3. Install PyTorch for CUDA 12.4 (compatible with driver >=12.4)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# 4. Install everything else directly from your file
+# 4. Install xformers with a CUDA 12.4-matched build
+pip install xformers --index-url https://download.pytorch.org/whl/cu124
+
+# 5. Install remaining dependencies
 pip install -r requirements.txt
 
 ```
 
-Once that finishes, your environment is fully primed. You can submit the `HPC_Job.sh` Slurm script, and it will pick up all these dependencies natively.
+Once that finishes, your environment is fully primed.
+
+### Quick start
+```bash
+# Full pipeline (all five phases, chained with --dependency):
+sbatch scripts/hpc_full_pipeline.sh
+
+# Or individual phases:
+sbatch scripts/hpc_generate.sh       # 4-GPU array, ~19 hr
+sbatch scripts/hpc_merge.sh          # CPU, ~30 min (after generate)
+sbatch scripts/hpc_preprocess.sh     # 1 GPU, ~4 hr
+sbatch scripts/hpc_extract.sh        # 1 GPU, ~2 hr
+sbatch scripts/hpc_build.sh          # CPU, ~15 min
+```
