@@ -4,8 +4,8 @@ dataset:
   dataroot: ../data
   part: 1
   nidentities: 400
-  imagesperidentity: 39
-  candidatesperidentity: 39
+  imagesperidentity: 40
+  candidatesperidentity: 70
   nforget: 40
   ntest: 60
   seed: 42

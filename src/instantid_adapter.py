@@ -349,6 +349,17 @@ class InstantIDGeneratorSession:
                 "CUDA optimisations enabled: cudnn benchmark, TF32 matmul, "
                 "high matmul precision"
             )
+        # ------------------------------------------------------------------
+        # Suppress diffusers library noise: VAE dtype warnings and
+        # per-step denoising tqdm bars (we have our own identity-level bar).
+        # ------------------------------------------------------------------
+        import diffusers.utils.logging as _dlog
+
+        _dlog.set_verbosity_error()
+        try:
+            self.pipeline.set_progress_bar_config(disable=True)
+        except (AttributeError, TypeError):
+            pass
         LOGGER.info(
             "Persistent InstantID session ready: device=%s, dtype=%s",
             self.runtime.device,

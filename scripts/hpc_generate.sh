@@ -45,6 +45,13 @@ mkdir -p "$DATA_DIR"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
+# Silence all tqdm progress bars (diffusers denoising + VAE decoder).
+# Identity-level progress is logged via LOGGER.info() lines instead.
+export TQDM_DISABLE=1
+
+# Suppress ONNX Runtime thread-affinity errors (HPC node quirk)
+export ORT_LOG_LEVEL=3
+
 # Model cache on persistent storage
 export HF_HOME="$CACHE_DIR/hf_cache"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
