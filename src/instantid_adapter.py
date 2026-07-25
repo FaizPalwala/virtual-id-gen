@@ -410,9 +410,7 @@ class InstantIDGeneratorSession:
                     negative_prompt=negative_prompt,
                     device=self.runtime.device,
                     num_images_per_prompt=num_images_per_prompt,
-                    do_classifier_free_guidance=(
-                        self.pipeline.do_classifier_free_guidance
-                    ),
+                    do_classifier_free_guidance=True,
                 )
             prompt_cache[prompt_text] = {
                 "prompt_embeds": prompt_embeds,
