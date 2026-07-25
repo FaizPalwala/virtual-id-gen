@@ -366,6 +366,114 @@ class InstantIDGeneratorSession:
             draw_keypoints(rgb_image, face.kps),
         )
 
+    def precompute_prompt_embeddings(
+        self,
+        prompts: list[str],
+        negative_prompt: str,
+        num_images_per_prompt: int = 1,
+    ) -> tuple[dict[str, tuple[Any, Any, Any, Any]], tuple[Any, Any, Any, Any]]:
+        """Pre-encode every unique prompt + negative prompt once.
+
+        SDXL's text encoder runs twice per generation (prompt + negative prompt).
+        For 400 identities × 39 variations that is 31 200 encoder forward passes.
+        This method reduces that to 40 calls total (39 prompts + 1 negative).
+
+        Returns
+        -------
+        prompt_cache : dict[str, (prompt_embeds, negative_prompt_embeds, pooled, neg_pooled)]
+            Keyed by the verbatim prompt string.
+        neg_embeds : (prompt_embeds, negative_prompt_embeds, pooled, neg_pooled)
+            Shared negative‑prompt embedding tuple (IDENTICAL for all prompts).
+        """
+        unique_prompts = sorted(set(prompts))
+        import torch
+
+        prompt_cache: dict[str, tuple] = {}
+        LOGGER.info(
+            "Precomputing embeddings for %d unique prompts + negative…",
+            len(unique_prompts),
+        )
+        for prompt_text in unique_prompts:
+            with torch.inference_mode():
+                (
+                    prompt_embeds,
+                    neg_embeds,
+                    pooled_embeds,
+                    neg_pooled_embeds,
+                ) = self.pipeline.encode_prompt(
+                    prompt=prompt_text,
+                    negative_prompt=negative_prompt,
+                    device=self.runtime.device,
+                    num_images_per_prompt=num_images_per_prompt,
+                    do_classifier_free_guidance=(
+                        self.pipeline.do_classifier_free_guidance
+                    ),
+                )
+            prompt_cache[prompt_text] = {
+                "prompt_embeds": prompt_embeds,
+                "negative_prompt_embeds": neg_embeds,
+                "pooled_prompt_embeds": pooled_embeds,
+                "negative_pooled_prompt_embeds": neg_pooled_embeds,
+            }
+
+        # Build the deduped negative embedding (identical across all prompts).
+        first_entry = prompt_cache[unique_prompts[0]]
+        neg_tuple = (
+            first_entry["negative_prompt_embeds"],
+            first_entry["pooled_prompt_embeds"],
+            first_entry["negative_pooled_prompt_embeds"],
+        )
+        LOGGER.info("Embedding cache built: %d prompts", len(prompt_cache))
+        return prompt_cache, neg_tuple
+
+    def generate_cached(
+        self,
+        identity: EncodedIdentity,
+        output_path: str | Path,
+        *,
+        prompt_embeddings: dict[str, Any],
+        prompt_text: str,
+        neg_embeds_tuple: tuple[Any, Any, Any, Any],
+        seed: int,
+        width: int = 1024,
+        height: int = 1024,
+        num_inference_steps: int = 35,
+        guidance_scale: float = 5.5,
+    ) -> Path:
+        """Generate one candidate using precomputed SDXL embeddings."""
+        validate_generation_settings(
+            width, height, num_inference_steps, 0.0, self.controlnet_conditioning_scale
+        )
+        import torch
+
+        embeds = prompt_embeddings[prompt_text]
+
+        generator = torch.Generator(device=self.runtime.device).manual_seed(seed)
+        with torch.inference_mode(), torch.autocast(
+            device_type=self.runtime.device, dtype=self.runtime.dtype
+        ):
+            result = self.pipeline(
+                prompt=prompt_text,
+                prompt_embeds=embeds["prompt_embeds"],
+                negative_prompt_embeds=embeds["negative_prompt_embeds"],
+                pooled_prompt_embeds=embeds["pooled_prompt_embeds"],
+                negative_pooled_prompt_embeds=embeds[
+                    "negative_pooled_prompt_embeds"
+                ],
+                image_embeds=identity.face_embedding,
+                image=identity.keypoint_image,
+                width=width,
+                height=height,
+                controlnet_conditioning_scale=self.controlnet_conditioning_scale,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=float(guidance_scale),
+                generator=generator,
+            ).images[0]
+        output = Path(output_path).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        result.save(output)
+        return output
+
     def generate(
         self,
         identity: EncodedIdentity,
