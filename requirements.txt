@@ -20,3 +20,4 @@ huggingface_hub
 accelerate 
 insightface 
 opencv-python
+xformers>=0.0.24

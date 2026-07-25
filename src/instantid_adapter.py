@@ -302,6 +302,48 @@ class InstantIDGeneratorSession:
         patch_legacy_instantid_check_inputs(self.pipeline)
         self.pipeline.load_ip_adapter_instantid(adapter_path)
         self.pipeline.set_ip_adapter_scale(float(ip_adapter_scale))
+
+        # ------------------------------------------------------------------
+        # Attention optimisation (xFormers or SDPA — choose best available)
+        # ------------------------------------------------------------------
+        try:
+            self.pipeline.enable_xformers_memory_efficient_attention()
+            LOGGER.info("xFormers memory-efficient attention enabled")
+        except (ImportError, ModuleNotFoundError):
+            self.pipeline.enable_attention_slicing(slice_size="auto")
+            LOGGER.info("xFormers unavailable; fell back to attention slicing")
+
+        # ------------------------------------------------------------------
+        # VAE memory/throughput tuning
+        # ------------------------------------------------------------------
+        self.pipeline.vae.enable_slicing()
+        self.pipeline.vae.enable_tiling()
+
+        # ------------------------------------------------------------------
+        # Scheduler: DPM-Solver++ with Karras sigmas for faster convergence
+        # ------------------------------------------------------------------
+        from diffusers import DPMSolverMultistepScheduler
+
+        self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+            self.pipeline.scheduler.config,
+            algorithm_type="dpmsolver++",
+            use_karras_sigmas=True,
+            solver_order=2,
+        )
+
+        # ------------------------------------------------------------------
+        # CUDA kernel auto-tuning (Ampere+ tensor cores, TF32, cuDNN)
+        # ------------------------------------------------------------------
+        import torch
+
+        if self.runtime.device == "cuda":
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.set_float32_matmul_precision("high")
+            LOGGER.info(
+                "CUDA optimisations enabled: cudnn benchmark, TF32 matmul, "
+                "high matmul precision"
+            )
         LOGGER.info(
             "Persistent InstantID session ready: device=%s, dtype=%s",
             self.runtime.device,
@@ -344,7 +386,9 @@ class InstantIDGeneratorSession:
         import torch
 
         generator = torch.Generator(device=self.runtime.device).manual_seed(seed)
-        with torch.inference_mode():
+        with torch.inference_mode(), torch.autocast(
+            device_type=self.runtime.device, dtype=self.runtime.dtype
+        ):
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
