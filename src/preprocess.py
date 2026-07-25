@@ -62,7 +62,9 @@ def preprocess_identity_candidates(
     processed_root = Path(processeddir)
     manifest_path = root / "raw_candidate_manifest.csv"
     candidates = pd.read_csv(manifest_path)
-    candidates = candidates[candidates.raw_status == "accepted_raw"].copy()
+    candidates = candidates[
+        candidates.raw_status.isin(["accepted_raw", "unvalidated"])
+    ].copy()
     output_root = processed_root / "images"
     rejected_root = processed_root / "rejected"
     shutil.rmtree(output_root, ignore_errors=True)

@@ -86,8 +86,18 @@ cd "$SHARD_TMPDIR/repo/src"
 
 # Generate 100 identities per shard with a unique random seed.
 # The seeds 42,44,46,48 produce non-overlapping shuffles of the SFHQ source pool.
+#
+# Each shard writes into its own dataroot to avoid overwriting.
+# After the job, merge with: python scripts/merge_shards.py
+SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
+mkdir -p "$SHARD_DATA/raw"
+# Source images are shared — symlink or copy once
+if [ -d "$SHARD_TMPDIR/data/raw" ] && [ ! -d "$SHARD_DATA/raw" ] || [ -z "$(ls -A "$SHARD_DATA/raw" 2>/dev/null)" ]; then
+    cp -r "$SHARD_TMPDIR/data/raw/." "$SHARD_DATA/raw/"
+fi
+
 python main.py --config-name step3_generate \
-    dataset.dataroot="$SHARD_TMPDIR/data" \
+    dataset.dataroot="$SHARD_DATA" \
     dataset.nidentities=100 \
     dataset.seed="$SHARD_SEED" \
     > "$REPO_DIR/logs/datagen_shard_${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.log" 2>&1
@@ -100,7 +110,10 @@ EXIT_CODE=$?
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Generation finished (exit $EXIT_CODE)"
 echo "[$(date)] Syncing data back..."
 
-rsync -av "$SHARD_TMPDIR/data/" "$DATA_DIR/"
+# Sync each shard's output under its own subdirectory for later merging
+SHARD_OUT="$DATA_DIR/shard_${SLURM_ARRAY_TASK_ID}"
+mkdir -p "$SHARD_OUT"
+rsync -av "$SHARD_DATA/identities/" "$SHARD_OUT/"
 
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Sync complete."
 exit $EXIT_CODE
