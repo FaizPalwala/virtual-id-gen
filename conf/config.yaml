@@ -22,7 +22,7 @@ pipeline:
     base_model: stabilityai/stable-diffusion-xl-base-1.0
     width: 1024
     height: 1024
-    num_inference_steps: 35
+    num_inference_steps: 25
     guidance_scale: 5.5
     ip_adapter_scale: 0.90
     controlnet_conditioning_scale: 0.80
