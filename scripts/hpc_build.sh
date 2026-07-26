@@ -4,7 +4,7 @@
 # ==========================================
 #SBATCH --job-name=msc_build
 #SBATCH --time=00:15:00
-#SBATCH --partition=cpu
+#SBATCH --partition=gpu
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 #SBATCH --output=logs/%x_%j.out

@@ -4,7 +4,7 @@
 # ==========================================
 #SBATCH --job-name=msc_merge
 #SBATCH --time=00:30:00
-#SBATCH --partition=cpu
+#SBATCH --partition=gpu
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --output=logs/%x_%j.out
