@@ -95,6 +95,14 @@ def merge_shards(outputdir: str, mergeddir: str, shard_count: int = 4) -> str:
         f"Merged {len(all_records)}/{shard_count} shards → "
         f"{n_candidates} candidates across {n_identities} identities (at {merged})"
     )
+
+    # --- Cleanup: remove per-shard directories ---
+    for shard_id in range(shard_count):
+        shard_dir = root / f"shard_{shard_id}"
+        if shard_dir.exists():
+            shutil.rmtree(shard_dir)
+            print(f"  Removed {shard_dir}")
+
     return str(merged)
 
 
