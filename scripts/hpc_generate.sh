@@ -104,7 +104,7 @@ if [ -d "$SHARD_TMPDIR/data/raw" ]; then
     fi
 fi
 
-python main.py --config-name step3_generate \
+python main.py --config-name step2_generate \
     dataset.dataroot="$SHARD_DATA" \
     dataset.nidentities=100 \
     dataset.seed="$SHARD_SEED" \
