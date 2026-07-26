@@ -46,7 +46,7 @@ export ORT_LOG_LEVEL=3
 REPO_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
 PARENT_DIR="$(dirname "$REPO_DIR")"
 CACHE_DIR="$PARENT_DIR/model_cache"
-DATA_DIR="$PARENT_DIR/data"
+DATA_DIR="/scratch/$USER/datagen/data"
 
 export HF_HOME="$CACHE_DIR/hf_cache"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"

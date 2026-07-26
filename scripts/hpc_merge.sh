@@ -31,7 +31,7 @@ conda activate data_gen
 # ==========================================
 REPO_DIR="$SLURM_SUBMIT_DIR"
 PARENT_DIR=$(dirname "$REPO_DIR")
-DATA_DIR="$PARENT_DIR/data"
+DATA_DIR="/scratch/$USER/datagen/data"
 
 # ==========================================
 # 3. Run Merge
