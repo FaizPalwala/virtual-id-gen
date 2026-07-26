@@ -114,5 +114,5 @@ if __name__ == "__main__":
     p.add_argument(
         "--mergeddir", required=True, help="Where to write the unified identities/ output"
     )
-    p.add_argument("--shardcount", type=int, default=4)
+    p.add_argument("--shardcount", type=int, default=4, dest="shard_count")
     merge_shards(**vars(p.parse_args()))
