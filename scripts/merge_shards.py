@@ -29,7 +29,9 @@ import pandas as pd
 IDENTITIES_PER_SHARD = 100
 
 
-def merge_shards(outputdir: str, mergeddir: str, shard_count: int = 4) -> str:
+def merge_shards(
+    outputdir: str, mergeddir: str, rawdir: str = "", shard_count: int = 4
+) -> str:
     root = Path(outputdir)
     merged = Path(mergeddir)
     merged.mkdir(parents=True, exist_ok=True)
@@ -74,6 +76,15 @@ def merge_shards(outputdir: str, mergeddir: str, shard_count: int = 4) -> str:
                 shutil.copy2(src, dst)
             df.at[_, "raw_candidatepath"] = str(dst)
 
+        # Rewrite stale TMPDIR seed paths to the persistent raw directory.
+        # generate_identities stores absolute /tmp/job.XXXX/.../raw/file.jpg
+        # paths in seedpath, which are dead by the time preprocessing runs.
+        if rawdir and "seedpath" in df.columns:
+            raw_root = Path(rawdir)
+            df["seedpath"] = df["seedpath"].apply(
+                lambda p: str(raw_root / Path(p).name)
+            )
+
         all_records.append(df)
         if skipped.exists():
             all_skipped.append(pd.read_csv(skipped))
@@ -115,4 +126,9 @@ if __name__ == "__main__":
         "--mergeddir", required=True, help="Where to write the unified identities/ output"
     )
     p.add_argument("--shardcount", type=int, default=4, dest="shard_count")
+    p.add_argument(
+        "--rawdir",
+        default="",
+        help="Persistent raw/ source directory for rewriting stale TMPDIR seed paths",
+    )
     merge_shards(**vars(p.parse_args()))

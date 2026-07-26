@@ -45,6 +45,7 @@ mkdir -p "$MERGED_DIR"
 python "$REPO_DIR/scripts/merge_shards.py" \
     --outputdir "$SHARD_ROOT" \
     --mergeddir "$MERGED_DIR" \
+    --rawdir "$DATA_DIR/raw" \
     --shardcount 4
 
 EXIT_CODE=$?
