@@ -4,7 +4,6 @@
 # ==========================================
 #SBATCH --job-name=msc_pipeline
 #SBATCH --time=3-00:00:00
-#SBATCH --partition=gpu
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=2G
 #SBATCH --output=logs/%x_%j.out
