@@ -245,6 +245,12 @@ if __name__ == "__main__":
     parser.add_argument("--minsimilarityfinal", type=float, default=0.45)
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--max-candidates",
+        type=int,
+        default=None,
+        help="Process at most N candidates (smoke test); skips cluster cardinality check",
+    )
     args = parser.parse_args()
     preprocess_identity_candidates(
         args.identitydir,
@@ -256,4 +262,5 @@ if __name__ == "__main__":
         args.minsimilarityfinal,
         args.ctxid,
         args.device,
+        max_candidates=args.max_candidates,
     )

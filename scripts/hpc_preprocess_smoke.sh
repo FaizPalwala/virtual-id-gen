@@ -50,9 +50,12 @@ bash "$REPO_DIR/scripts/gpu_preflight.sh" 2>/dev/null || echo "  (preflight skip
 echo "[$(date)] Running smoke preprocess (70 candidates, 1 identity)..."
 cd "$REPO_DIR/src"
 
-python main.py --config-name step3_preprocess \
-    dataset.dataroot="$DATA_DIR/merged" \
-    pipeline.max_candidates=70 \
+# Direct invocation — no Hydra config pollution for debug flags
+python preprocess.py \
+    --identitydir "$DATA_DIR/merged/identities" \
+    --processeddir "$DATA_DIR/merged/processed" \
+    --imagesperidentity 70 \
+    --max-candidates 70 \
     > "$REPO_DIR/logs/preprocess_smoke_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
