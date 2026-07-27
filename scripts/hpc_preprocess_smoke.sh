@@ -11,7 +11,7 @@
 #   cat /scratch/$USER/datagen/data/merged/processed/preprocessing_rejection_manifest.csv
 # ==========================================
 #SBATCH --job-name=msc_ppsmoke
-#SBATCH --time=0-01:00:00
+#SBATCH --time=01:00:00
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
