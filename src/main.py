@@ -48,6 +48,7 @@ def main(cfg: DictConfig) -> None:
             cfg.pipeline.confthreshold,
             cfg.pipeline.min_similarity_final,
             cfg.pipeline.ctxid,
+            max_candidates=cfg.pipeline.get("max_candidates"),
         )
     if cfg.steps.extract:
         from extract_embeddings import extract_embeddings

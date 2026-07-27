@@ -51,6 +51,7 @@ def preprocess_identity_candidates(
     min_similarity_final: float = 0.45,
     ctxid: int = 0,
     device: str = "auto",
+    max_candidates: int | None = None,
 ) -> str:
     """Create exactly ``imagesperidentity`` aligned final samples per cluster.
 
@@ -75,11 +76,20 @@ def preprocess_identity_candidates(
     seed_embeddings = {}
     accepted = []
     rejected = []
-    for row in tqdm(
-        candidates.itertuples(index=False),
-        total=len(candidates),
-        desc="Preprocessing candidates",
+    loop_total = len(candidates)
+    smoke_mode = False
+    if max_candidates:
+        loop_total = min(len(candidates), max_candidates)
+        smoke_mode = True
+    for idx, row in enumerate(
+        tqdm(
+            candidates.itertuples(index=False),
+            total=loop_total,
+            desc="Preprocessing candidates",
+        )
     ):
+        if smoke_mode and idx >= max_candidates:
+            break
         source = Path(row.raw_candidatepath)
         reason = None
         confidence = None
@@ -157,6 +167,17 @@ def preprocess_identity_candidates(
             processed_root / "preprocessing_rejection_manifest.csv", index=False
         )
     if not accepted:
+        if smoke_mode:
+            rejection_counts = (
+                pd.DataFrame(rejected)["rejection_reason"].value_counts().to_dict()
+                if rejected
+                else {}
+            )
+            print(
+                f"[SMOKE] All {len(candidates)} sampled candidates rejected. "
+                f"Rejection reasons: {rejection_counts}"
+            )
+            return str(processed_root / "preprocessing_rejection_manifest.csv")
         rejection_counts = (
             pd.DataFrame(rejected)["rejection_reason"].value_counts().to_dict()
             if rejected
@@ -172,7 +193,10 @@ def preprocess_identity_candidates(
             ["arcface_similarity", "detection_confidence", "laplacian_variance"],
             ascending=False,
         )
-        if len(ranked) < imagesperidentity:
+        if smoke_mode:
+            # Smoke mode: take all accepted, don't enforce cluster cardinality
+            take = min(len(ranked), imagesperidentity)
+        elif len(ranked) < imagesperidentity:
             reasons = Counter(
                 item["rejection_reason"]
                 for item in rejected
@@ -181,10 +205,12 @@ def preprocess_identity_candidates(
             raise RuntimeError(
                 f"Identity {cluster_id} has {len(ranked)}/{imagesperidentity} final samples; rejections={dict(reasons)}"
             )
+        else:
+            take = imagesperidentity
         destination = output_root / f"identity_{int(cluster_id):03d}"
         destination.mkdir()
         for index, record in enumerate(
-            ranked.head(imagesperidentity).to_dict("records")
+            ranked.head(take).to_dict("records")
         ):
             final_path = destination / f"accepted_{index:03d}.jpg"
             Image.fromarray(record.pop("_crop")).save(final_path, quality=95)
