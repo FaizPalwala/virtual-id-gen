@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SFHQ-InstantID Dataset Schema",
+  "description": "Schema for sfhq_dataset.csv / sfhq_dataset.parquet",
+  "type": "object",
+  "properties": {
+    "imagepath": {
+      "type": "string",
+      "description": "Release-relative path to the 128×128 face crop, e.g. images/identity_037/012.png",
+      "pattern": "^images/identity_\\d{3}/\\d{3}\\.png$"
+    },
+    "clusterid": {
+      "type": "integer",
+      "description": "Synthetic identity cluster ID",
+      "minimum": 0,
+      "maximum": 399
+    },
+    "agegroup": {
+      "type": "integer",
+      "description": "Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "split": {
+      "type": "string",
+      "description": "Dataset split",
+      "enum": ["retain", "test", "forget"]
+    },
+    "forgetstep": {
+      "type": "integer",
+      "description": "Unlearning step when this identity is deleted; -1 for non-forget",
+      "minimum": -1,
+      "maximum": 39
+    }
+  },
+  "required": ["imagepath", "clusterid", "agegroup", "split", "forgetstep"],
+  "additionalProperties": false
+}

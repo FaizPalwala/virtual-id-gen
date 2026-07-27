@@ -61,8 +61,11 @@ def build_dataset(
     final = final[final.agegroup != -1].copy()
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
+    output_df = final[OUTPUT_COLUMNS]
     csv_path = output / "sfhqdataset.csv"
-    final[OUTPUT_COLUMNS].to_csv(csv_path, index=False)
+    parquet_path = output / "sfhqdataset.parquet"
+    output_df.to_csv(csv_path, index=False)
+    output_df.to_parquet(parquet_path, index=False)
     (output / "datasetsummary.json").write_text(
         json.dumps(
             {

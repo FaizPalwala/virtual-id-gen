@@ -1,0 +1,76 @@
+{
+  "dataset": "SFHQ-InstantID",
+  "version": "1.0.0",
+  "release_date": "TODO",
+  "image_count": 16000,
+  "identity_count": 400,
+  "resolution": [128, 128],
+  "color_mode": "RGB",
+  "format": "PNG",
+  "splits": {
+    "retain": {"identities": 300, "images": 12000},
+    "test": {"identities": 60, "images": 2400},
+    "forget": {"identities": 40, "images": 1600, "steps": 40}
+  },
+  "random_seed": 42,
+  "shard_seeds": [42, 44, 46, 48],
+  "git_commit": "TODO",
+  "generation_config": {
+    "base_model": "stabilityai/stable-diffusion-xl-base-1.0",
+    "num_inference_steps": 25,
+    "guidance_scale": 5.5,
+    "ip_adapter_scale": 0.90,
+    "controlnet_conditioning_scale": 0.80,
+    "generation_resolution": [1024, 1024],
+    "crop_resolution": [128, 128],
+    "candidates_per_identity": 70,
+    "images_per_identity": 40,
+    "min_similarity_raw": 0.40,
+    "min_similarity_final": 0.45,
+    "blur_threshold": 80.0,
+    "mtcnn_confidence_threshold": 0.85
+  },
+  "package_versions": {
+    "python": "3.10",
+    "torch": "2.6.0+cu124",
+    "diffusers": "0.39.0",
+    "transformers": "TODO",
+    "insightface": "TODO",
+    "facenet_pytorch": "TODO",
+    "opencv": "TODO",
+    "pillow": "TODO",
+    "numpy": "TODO",
+    "pandas": "TODO"
+  },
+  "model_revisions": {
+    "sdxl": {
+      "repo": "stabilityai/stable-diffusion-xl-base-1.0",
+      "revision": "TODO",
+      "download_date": "TODO"
+    },
+    "instantid": {
+      "repo": "TODO",
+      "revision": "TODO",
+      "download_date": "TODO"
+    },
+    "controlnet": {
+      "repo": "diffusers/controlnet-canny-sdxl-1.0",
+      "revision": "TODO",
+      "download_date": "TODO"
+    },
+    "insightface_buffalo_l": {
+      "pack": "buffalo_l",
+      "models": ["det_10g.onnx", "w600k_r50.onnx", "genderage.onnx", "1k3d68.onnx", "2d106det.onnx"],
+      "download_date": "TODO"
+    }
+  },
+  "sfhq_source": {
+    "dataset": "SFHQ",
+    "url": "https://github.com/SelfishGene/SFHQ-dataset",
+    "kaggle_listing_licence": "CC0 / Public Domain",
+    "part": 1,
+    "image_count": "TODO",
+    "download_date": "TODO"
+  },
+  "checksums": "metadata/checksums.sha256"
+}

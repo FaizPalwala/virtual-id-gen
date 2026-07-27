@@ -1,0 +1,63 @@
+MIT License — Code
+
+Copyright (c) 2026 Faiz Palwala
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the source code in this repository and associated documentation files, to
+deal in the code without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the code, and to permit persons to whom the code is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the code.
+
+THE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE CODE OR THE USE OR OTHER DEALINGS IN THE
+CODE.
+
+---
+
+Non-Commercial Research Licence — Images and Metadata
+
+The image files and metadata tables included in this dataset release are
+licensed for **non-commercial research use only**, subject to the following
+terms:
+
+1. **Permitted use:**  Academic and non-commercial research, including
+   reproduction, distribution, and creation of derivative works for research
+   purposes, provided this licence and the dataset citation are included.
+
+2. **Prohibited use:**  The images and metadata must not be used for:
+   - Biometric identification, verification, or authentication of individuals.
+   - Surveillance, tracking, or monitoring of individuals.
+   - Impersonation, deepfake creation intended to deceive, or any application
+     that could cause harm to individuals.
+   - Training or evaluating models that make high-impact decisions about
+     people (employment, credit, housing, law enforcement, healthcare
+     eligibility).
+   - Commercial products or services without a separate commercial licence.
+
+3. **Attribution:**  Any public use, redistribution, or derivative work must
+   cite the dataset using the citation in [`CITATION.cff`](CITATION.cff).
+
+4. **No warranty:**  The dataset is provided "as is" without warranty of any
+   kind.  The authors make no representations about the suitability, accuracy,
+   or safety of the data.
+
+5. **Upstream terms:**  This licence covers only the images and metadata
+   produced by the SFHQ-InstantID pipeline.  Users are additionally bound by
+   the output-use terms of SDXL, InstantID, ControlNet, and any other upstream
+   model whose weights were used to generate the images.  See
+   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+6. **Takedown:**  To report a credible likeness concern or policy violation,
+   contact the authors via the GitHub repository.
+
+This licence may be revised toward a more permissive licence after upstream
+model output-use terms have been verified and supervisor/institutional sign-off
+is obtained.  The current licence applies to version 1.0.0 of the dataset.
