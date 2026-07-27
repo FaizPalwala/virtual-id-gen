@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from builddataset import OUTPUT_COLUMNS, build_dataset
+from build_dataset import OUTPUT_COLUMNS, build_dataset
 
 def test_build_preserves_legacy_csv_schema(tmp_path):
     identities, embeddings, output = tmp_path / "identities", tmp_path / "emb", tmp_path / "out"
