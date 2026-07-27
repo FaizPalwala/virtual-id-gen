@@ -108,23 +108,27 @@ def preprocess_identity_candidates(
             if reason is None:
                 seed_path = str(row.seedpath)
                 if seed_path not in seed_embeddings:
-                    seed, _, _ = get_embedding_and_attributes(
-                        app, cv2.imread(seed_path)
+                    seed_image = cv2.imread(seed_path)
+                    if seed_image is None:
+                        reason = "seed_image_unreadable"
+                    else:
+                        seed, _, _ = get_embedding_and_attributes(app, seed_image)
+                        if seed is None:
+                            reason = "no_face_in_seed"
+                        else:
+                            seed_embeddings[seed_path] = seed
+                if reason is None:
+                    final_embedding, _, _ = get_embedding_and_attributes(
+                        app, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
                     )
-                    if seed is None:
-                        raise RuntimeError(f"No detectable seed face: {seed_path}")
-                    seed_embeddings[seed_path] = seed
-                final_embedding, _, _ = get_embedding_and_attributes(
-                    app, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
-                )
-                if final_embedding is None:
-                    reason = "no_face_in_final_crop"
-                else:
-                    similarity = normalised_cosine_similarity(
-                        seed_embeddings[seed_path], final_embedding
-                    )
-                    if similarity < min_similarity_final:
-                        reason = "low_final_similarity"
+                    if final_embedding is None:
+                        reason = "no_face_in_final_crop"
+                    else:
+                        similarity = normalised_cosine_similarity(
+                            seed_embeddings[seed_path], final_embedding
+                        )
+                        if similarity < min_similarity_final:
+                            reason = "low_final_similarity"
             record = row._asdict() | {
                 "detection_confidence": confidence,
                 "laplacian_variance": sharpness,
@@ -146,6 +150,22 @@ def preprocess_identity_candidates(
                     "rejection_reason": f"processing_error:{type(error).__name__}",
                 }
             )
+    # Write rejection manifest early — if the groupby below fails, we still
+    # have the rejection reasons to diagnose the root cause.
+    if rejected:
+        pd.DataFrame(rejected).drop(columns=["_crop"], errors="ignore").to_csv(
+            processed_root / "preprocessing_rejection_manifest.csv", index=False
+        )
+    if not accepted:
+        rejection_counts = (
+            pd.DataFrame(rejected)["rejection_reason"].value_counts().to_dict()
+            if rejected
+            else {}
+        )
+        raise RuntimeError(
+            f"All {len(candidates)} candidates were rejected. "
+            f"Rejection reasons: {rejection_counts}"
+        )
     final_rows = []
     for cluster_id, group in pd.DataFrame(accepted).groupby("clusterid", sort=True):
         ranked = group.sort_values(
@@ -172,9 +192,6 @@ def preprocess_identity_candidates(
             final_rows.append(record)
     final = pd.DataFrame(final_rows).sort_values(["clusterid", "imagepath"])
     final.to_csv(processed_root / "identitymanifest.csv", index=False)
-    pd.DataFrame(rejected).drop(columns=["_crop"], errors="ignore").to_csv(
-        processed_root / "preprocessing_rejection_manifest.csv", index=False
-    )
     (processed_root / "preprocessing_metadata.json").write_text(
         json.dumps(
             {
