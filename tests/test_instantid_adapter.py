@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
-from instantidadapter import build_parser, draw_keypoints, validate_arguments
+from instantid_adapter import build_parser, draw_keypoints, validate_arguments
 
 
 def test_parser_accepts_pipeline_argument_contract():
