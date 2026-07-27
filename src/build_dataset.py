@@ -3,7 +3,7 @@ build_dataset.py
 
 Constructs the final Phase 2 dataset mapping by merging generated identity 
 manifests with extracted embedding attributes. Applies the train/test/forget splits.
-Build the backward-compatible final ``sfhqdataset.csv`` file.
+Build the backward-compatible final ``dataset.csv`` file.
 """
 from __future__ import annotations
 
@@ -62,8 +62,8 @@ def build_dataset(
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
     output_df = final[OUTPUT_COLUMNS]
-    csv_path = output / "sfhqdataset.csv"
-    parquet_path = output / "sfhqdataset.parquet"
+    csv_path = output / "dataset.csv"
+    parquet_path = output / "dataset.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
     (output / "datasetsummary.json").write_text(
