@@ -14,12 +14,39 @@ from collections import Counter
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pandas as pd
 from insightface.utils import face_align
+from PIL import Image
 from tqdm import tqdm
 
 from common import laplacian_variance
 from extract_embeddings import load_arcface_model
+
+
+def _cuda_available() -> bool:
+    """Return True if PyTorch can access a CUDA GPU."""
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
+def _make_mtcnn(imgsize: int, confthreshold: float):
+    """Build MTCNN for CPU fallback."""
+    import torch
+    from facenet_pytorch import MTCNN
+
+    return MTCNN(
+        image_size=imgsize,
+        margin=20,
+        keep_all=False,
+        min_face_size=40,
+        thresholds=[0.6, 0.7, confthreshold],
+        device="cpu",
+    )
 
 
 def preprocess_identity_candidates(
@@ -28,7 +55,7 @@ def preprocess_identity_candidates(
     imagesperidentity: int,
     imgsize: int = 128,
     blurthreshold: float = 80.0,
-    confthreshold: float = 0.3,
+    confthreshold: float = 0.1,
     ctxid: int = 0,
     max_candidates: int | None = None,
     strict: bool = True,
@@ -51,8 +78,16 @@ def preprocess_identity_candidates(
     shutil.rmtree(output_root, ignore_errors=True)
     output_root.mkdir(parents=True, exist_ok=True)
     rejected_root.mkdir(parents=True, exist_ok=True)
-    app = load_arcface_model(ctxid)
-    app.det_model.thresh = 0.3  # InsightFace default is 0.5 — too strict for CPU
+
+    insface = _cuda_available()
+    if insface:
+        app = load_arcface_model(ctxid)
+        app.det_model.thresh = 0.3
+        _conf = confthreshold  # 0.3 default for InsightFace
+    else:
+        mtcnn = _make_mtcnn(imgsize, confthreshold)
+        _conf = confthreshold if confthreshold > 0.5 else 0.85  # MTCNN floor
+
     accepted = []
     rejected = []
     loop_total = len(candidates)
@@ -77,19 +112,38 @@ def preprocess_identity_candidates(
             img_bgr = cv2.imread(str(source))
             if img_bgr is None:
                 reason = "image_unreadable"
-            else:
+            elif insface:
                 faces = app.get(img_bgr)
                 if not faces:
                     reason = "no_face_after_generation"
                 else:
                     face = max(faces, key=lambda f: f.det_score)
                     confidence = float(face.det_score)
-                    if confidence < confthreshold:
+                    if confidence < _conf:
+                        reason = "low_detection_confidence"
+            else:
+                image_pil = Image.open(source).convert("RGB")
+                face_tensor, probs = mtcnn(image_pil, return_prob=True)
+                if face_tensor is None or probs is None:
+                    reason = "no_face_after_generation"
+                else:
+                    confidence = float(
+                        probs if np.isscalar(probs) else probs[0]
+                    )
+                    if confidence < _conf:
                         reason = "low_detection_confidence"
             if reason is None:
-                crop_bgr = face_align.norm_crop(
-                    img_bgr, face.kps, image_size=imgsize
-                )
+                if insface:
+                    crop_bgr = face_align.norm_crop(
+                        img_bgr, face.kps, image_size=imgsize
+                    )
+                else:
+                    crop = (
+                        ((face_tensor.permute(1, 2, 0).numpy() + 1.0) * 127.5)
+                        .clip(0, 255)
+                        .astype(np.uint8)
+                    )
+                    crop_bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
                 sharpness = laplacian_variance(crop_bgr)
                 if sharpness < blurthreshold:
                     reason = "blur"
