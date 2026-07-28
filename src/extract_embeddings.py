@@ -57,12 +57,19 @@ def get_embedding_and_attributes(app, image_bgr: np.ndarray):
 
 
 def get_embedding_cpu(app, crop_bgr: np.ndarray):
-    """On CPU the detector cannot find faces in aligned crops — use the
-    recognition model directly and return placeholder demographics."""
-    embedding = app.models["recognition"].get(crop_bgr)
+    """On CPU the detector cannot find faces in aligned crops — pass a
+    minimal face stub to the recognition model.  The crops are already
+    MTCNN-aligned, so no kps-based alignment is needed."""
+    h, w = crop_bgr.shape[:2]
+
+    class _FaceStub:
+        bbox = np.array([0, 0, w, h], dtype=np.float32)
+        kps = None
+
+    embedding = app.models["recognition"].get(crop_bgr, _FaceStub)
     if embedding is None:
         return None, None, None
-    return np.asarray(embedding.reshape(-1), dtype=np.float32), 25, 0
+    return np.asarray(embedding, dtype=np.float32), 25, 0
 
 def get_embedding_and_attributes_robust(app, image_bgr: np.ndarray, ctxid: int):
     """Return largest-face attributes from an unaligned/raw image.
