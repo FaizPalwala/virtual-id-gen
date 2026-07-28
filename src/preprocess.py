@@ -128,13 +128,19 @@ def preprocess_identity_candidates(
                         else:
                             seed_embeddings[seed_path] = seed
                 if reason is None:
-                    # crop is already BGR (MTCNN alignment uses cv2.warpAffine on BGR input)
-                    # DEBUG: save first 2 crops for visual inspection
+                    # MTCNN produces a tight 128×128 crop — InsightFace's
+                    # detector needs context around the face.  Pad 33 % and
+                    # convert the PyTorch RGB tensor to OpenCV BGR.
+                    pad = crop.shape[0] // 3
+                    crop_padded = cv2.copyMakeBorder(
+                        crop, pad, pad, pad, pad, cv2.BORDER_REFLECT_101
+                    )
+                    crop_bgr = cv2.cvtColor(crop_padded, cv2.COLOR_RGB2BGR)
                     if idx < 2:
                         debug_path = rejected_root / f"_debug_crop_{idx:03d}.png"
-                        cv2.imwrite(str(debug_path), crop)
+                        cv2.imwrite(str(debug_path), crop_bgr)
                     final_embedding, _, _ = get_embedding_and_attributes(
-                        app, crop
+                        app, crop_bgr
                     )
                     if final_embedding is None:
                         reason = "no_face_in_final_crop"
