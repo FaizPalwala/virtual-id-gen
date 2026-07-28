@@ -57,14 +57,26 @@ def get_embedding_and_attributes(app, image_bgr: np.ndarray):
 
 
 def get_embedding_cpu(app, crop_bgr: np.ndarray):
-    """On CPU the detector cannot find faces in aligned crops — pass a
-    minimal face stub to the recognition model.  The crops are already
-    MTCNN-aligned, so no kps-based alignment is needed."""
+    """On CPU the detector cannot find faces in aligned crops — supply
+    standard 5‑point landmarks so the recognition model can run norm_crop.
+    The crops are already MTCNN‑aligned, so the affine transform computed
+    from these keypoints will be close to identity."""
     h, w = crop_bgr.shape[:2]
+    kps_112 = np.array(
+        [
+            [38.2946, 51.6963],
+            [73.5318, 51.6963],
+            [56.0252, 71.7366],
+            [41.5493, 92.3655],
+            [70.7299, 92.3655],
+        ],
+        dtype=np.float32,
+    )
+    kps = kps_112 * (w / 112.0)
 
     class _FaceStub:
         bbox = np.array([0, 0, w, h], dtype=np.float32)
-        kps = None
+        kps = kps
 
     embedding = app.models["recognition"].get(crop_bgr, _FaceStub)
     if embedding is None:
