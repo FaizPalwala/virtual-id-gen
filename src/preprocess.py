@@ -143,9 +143,6 @@ def preprocess_identity_candidates(
                         crop, pad, pad, pad, pad, cv2.BORDER_REFLECT_101
                     )
                     crop_bgr = cv2.cvtColor(crop_padded, cv2.COLOR_RGB2BGR)
-                    if idx < 2:
-                        debug_path = rejected_root / f"_debug_crop_{idx:03d}.png"
-                        cv2.imwrite(str(debug_path), crop_bgr)
                     final_embedding, _, _ = get_embedding_and_attributes(
                         app, crop_bgr
                     )
@@ -185,22 +182,17 @@ def preprocess_identity_candidates(
             processed_root / "preprocessing_rejection_manifest.csv", index=False
         )
     if not accepted:
-        if smoke_mode:
-            rejection_counts = (
-                pd.DataFrame(rejected)["rejection_reason"].value_counts().to_dict()
-                if rejected
-                else {}
-            )
-            print(
-                f"[SMOKE] All {len(candidates)} sampled candidates rejected. "
-                f"Rejection reasons: {rejection_counts}"
-            )
-            return str(processed_root / "preprocessing_rejection_manifest.csv")
         rejection_counts = (
             pd.DataFrame(rejected)["rejection_reason"].value_counts().to_dict()
             if rejected
             else {}
         )
+        if smoke_mode:
+            print(
+                f"[SMOKE] All {len(candidates)} sampled candidates rejected. "
+                f"Rejection reasons: {rejection_counts}"
+            )
+            return str(processed_root / "preprocessing_rejection_manifest.csv")
         raise RuntimeError(
             f"All {len(candidates)} candidates were rejected. "
             f"Rejection reasons: {rejection_counts}"
