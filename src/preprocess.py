@@ -52,6 +52,7 @@ def preprocess_identity_candidates(
     ctxid: int = 0,
     device: str = "auto",
     max_candidates: int | None = None,
+    strict: bool = True,
 ) -> str:
     """Create exactly ``imagesperidentity`` aligned final samples per cluster.
 
@@ -213,9 +214,15 @@ def preprocess_identity_candidates(
                 for item in rejected
                 if item["clusterid"] == cluster_id
             )
-            raise RuntimeError(
-                f"Identity {cluster_id} has {len(ranked)}/{imagesperidentity} final samples; rejections={dict(reasons)}"
+            if strict:
+                raise RuntimeError(
+                    f"Identity {cluster_id} has {len(ranked)}/{imagesperidentity} final samples; rejections={dict(reasons)}"
+                )
+            print(
+                f"WARNING: Identity {cluster_id} has {len(ranked)}/{imagesperidentity} "
+                f"final samples (strict=False, skipping); rejections={dict(reasons)}"
             )
+            continue
         else:
             take = imagesperidentity
         destination = output_root / f"identity_{int(cluster_id):03d}"
@@ -262,6 +269,12 @@ if __name__ == "__main__":
         default=None,
         help="Process at most N candidates (smoke test); skips cluster cardinality check",
     )
+    parser.add_argument(
+        "--no-strict",
+        dest="strict",
+        action="store_false",
+        help="Skip undersized identities instead of crashing (default: strict=True)",
+    )
     args = parser.parse_args()
     preprocess_identity_candidates(
         args.identitydir,
@@ -274,4 +287,5 @@ if __name__ == "__main__":
         args.ctxid,
         args.device,
         max_candidates=args.max_candidates,
+        strict=args.strict,
     )
