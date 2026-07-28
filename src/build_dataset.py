@@ -80,6 +80,8 @@ def build_dataset(
     samples_root.mkdir(parents=True)
 
     raw_manifest = Path(outputdir) / "merged" / "identities" / "raw_candidate_manifest.csv"
+    if not raw_manifest.exists():
+        raw_manifest = Path(outputdir) / "identities" / "raw_candidate_manifest.csv"
     if raw_manifest.exists():
         seeds = (
             pd.read_csv(raw_manifest)[["clusterid", "seedpath"]]
