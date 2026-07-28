@@ -10,9 +10,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")  # headless backend
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 OUTPUT_COLUMNS = ["imagepath", "clusterid", "agegroup", "split", "forgetstep"]
 
@@ -70,8 +74,7 @@ def build_dataset(
     )
     final = final[final.agegroup != -1].copy()
 
-    # Cluster samples: 2×2 grid (seed + 3 examples) per identity.
-    CELL = 256
+    # Cluster samples: asymmetric matplotlib grid per identity.
     samples_root = Path(outputdir) / "cluster_samples"
     if samples_root.exists():
         import shutil
@@ -98,34 +101,68 @@ def build_dataset(
 
         # Collect up to 4 images: seed + 3 examples
         image_paths = []
-        labels = []
         seed_path = seeds.get(cid, None)
         if seed_path and Path(seed_path).exists():
             image_paths.append(seed_path)
-            labels.append("seed")
         examples = final[final.clusterid == cid].imagepath.head(3)
         for i, img_path in enumerate(examples, 1):
             if Path(img_path).exists():
                 image_paths.append(img_path)
-                labels.append(f"ex.{i}")
 
         if not image_paths:
             continue
 
-        grid = Image.new("RGB", (CELL * 2, CELL * 2), (255, 255, 255))
-        positions = [(0, 0), (CELL, 0), (0, CELL), (CELL, CELL)]
-        for pos, img_path, label in zip(positions, image_paths, labels):
-            img = Image.open(img_path).convert("RGB").resize((CELL, CELL))
-            grid.paste(img, pos)
+        # Asymmetric grid: seed spans left column (3 rows), variations stack right.
+        img_list = [Image.open(p).convert("RGB") for p in image_paths]
+        cell_w, cell_h = img_list[0].size  # all same size from preprocess
 
-            draw = ImageDraw.Draw(grid)
-            # Drop-shadow for readability
-            for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
-                draw.text((pos[0] + 5 + dx, pos[1] + 5 + dy), label, fill=(0, 0, 0))
-            draw.text((pos[0] + 5, pos[1] + 5), label, fill=(255, 255, 255))
+        fig, axes = plt.subplots(
+            3, 2, figsize=(10, 7.5), facecolor="#f8f9fa",
+            gridspec_kw={"width_ratios": [2.2, 1], "hspace": 0.25, "wspace": 0.15},
+        )
 
+        # Seed image — left column, all 3 rows
+        axes[0, 0].imshow(img_list[0])
+        axes[0, 0].set_title("SEED", fontsize=9, fontweight="bold", color="#c0392b", pad=4)
+        axes[0, 0].axis("off")
+        for spine in axes[0, 0].spines.values():
+            spine.set_visible(True)
+            spine.set_color("#c0392b")
+            spine.set_linewidth(2.5)
+        # Merge the 3 left cells
+        axes[1, 0].remove()
+        axes[2, 0].remove()
+        ax_seed = fig.add_subplot(3, 2, (1, 3, 5))
+        ax_seed.imshow(img_list[0])
+        ax_seed.axis("off")
+        for spine in ax_seed.spines.values():
+            spine.set_visible(True)
+            spine.set_color("#c0392b")
+            spine.set_linewidth(3)
+
+        # Variation images — stacked right column
+        for i in range(1, min(4, len(img_list))):
+            ax = axes[i - 1, 1]
+            ax.imshow(img_list[i])
+            ax.set_title(f"Example {i}", fontsize=8, color="#555", pad=3)
+            ax.axis("off")
+            rect = mpatches.Rectangle(
+                (0, 0), cell_w - 1, cell_h - 1,
+                linewidth=1, edgecolor="#ccc", facecolor="none",
+            )
+            ax.add_patch(rect)
+
+        # Hide any unused subplots (if fewer than 4 images)
+        for j in range(len(img_list) - 1, 3):
+            axes[j, 1].axis("off")
+
+        fig.suptitle(
+            f"Identity {int(cid):03d} — {split.upper()}",
+            fontsize=13, fontweight="bold", y=0.97,
+        )
         out = samples_root / split / f"identity_{int(cid):03d}.png"
-        grid.save(out)
+        fig.savefig(out, dpi=150, bbox_inches="tight")
+        plt.close(fig)
 
     # ------------------------------------------------------------------
     output = Path(outputdir)
