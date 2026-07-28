@@ -8,11 +8,11 @@ Build the backward-compatible final ``dataset.csv`` file.
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from PIL import Image, ImageDraw, ImageFont
 
 OUTPUT_COLUMNS = ["imagepath", "clusterid", "agegroup", "split", "forgetstep"]
 
@@ -61,9 +61,14 @@ def build_dataset(
     )
     final = final[final.agegroup != -1].copy()
 
-    # Cluster samples: seed + 3 examples per identity, organised by split.
+    # Cluster samples: 2×2 grid (seed + 3 examples) per identity.
+    CELL = 256
     samples_root = Path(outputdir) / "cluster_samples"
-    shutil.rmtree(samples_root, ignore_errors=True)
+    if samples_root.exists():
+        import shutil
+
+        shutil.rmtree(samples_root)
+    samples_root.mkdir(parents=True)
 
     raw_manifest = Path(identitydir) / "raw_candidate_manifest.csv"
     if raw_manifest.exists():
@@ -78,18 +83,40 @@ def build_dataset(
 
     for cid in sorted(final.clusterid.unique()):
         split = split_map[cid]
-        dest = samples_root / split / f"identity_{int(cid):03d}"
-        dest.mkdir(parents=True, exist_ok=True)
+        (samples_root / split).mkdir(parents=True, exist_ok=True)
 
+        # Collect up to 4 images: seed + 3 examples
+        image_paths = []
+        labels = []
         seed_path = seeds.get(cid, None)
         if seed_path and Path(seed_path).exists():
-            shutil.copy(seed_path, dest / f"seed_{Path(seed_path).name}")
-
+            image_paths.append(seed_path)
+            labels.append("seed")
         examples = final[final.clusterid == cid].imagepath.head(3)
         for i, img_path in enumerate(examples, 1):
             if Path(img_path).exists():
-                shutil.copy(img_path, dest / f"example_{i}_{Path(img_path).name}")
+                image_paths.append(img_path)
+                labels.append(f"ex.{i}")
 
+        if not image_paths:
+            continue
+
+        grid = Image.new("RGB", (CELL * 2, CELL * 2), (255, 255, 255))
+        positions = [(0, 0), (CELL, 0), (0, CELL), (CELL, CELL)]
+        for pos, img_path, label in zip(positions, image_paths, labels):
+            img = Image.open(img_path).convert("RGB").resize((CELL, CELL))
+            grid.paste(img, pos)
+
+            draw = ImageDraw.Draw(grid)
+            # Drop-shadow for readability
+            for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+                draw.text((pos[0] + 5 + dx, pos[1] + 5 + dy), label, fill=(0, 0, 0))
+            draw.text((pos[0] + 5, pos[1] + 5), label, fill=(255, 255, 255))
+
+        out = samples_root / split / f"identity_{int(cid):03d}.png"
+        grid.save(out)
+
+    # ------------------------------------------------------------------
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
     output_df = final[OUTPUT_COLUMNS]
