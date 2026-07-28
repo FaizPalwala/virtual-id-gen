@@ -94,7 +94,7 @@ def preprocess_identity_candidates(
                         reason = "low_detection_confidence"
             if reason is None:
                 crop_bgr = face_align.norm_crop(
-                    img_bgr, face.landmark, image_size=imgsize
+                    img_bgr, face.kps, image_size=imgsize
                 )
                 sharpness = laplacian_variance(crop_bgr)
                 if sharpness < blurthreshold:
