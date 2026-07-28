@@ -161,7 +161,7 @@ def preprocess_identity_candidates(
                 "rejection_reason": reason,
             }
             if reason is None:
-                record["_crop"] = crop
+                record["_crop"] = crop_bgr
                 accepted.append(record)
             else:
                 rejected.append(record)
@@ -229,7 +229,7 @@ def preprocess_identity_candidates(
             ranked.head(take).to_dict("records")
         ):
             final_path = destination / f"accepted_{index:03d}.jpg"
-            Image.fromarray(record.pop("_crop")).save(final_path, quality=95)
+            cv2.imwrite(str(final_path), record.pop("_crop"))
             record["imagepath"] = str(final_path)
             final_rows.append(record)
     final = pd.DataFrame(final_rows).sort_values(["clusterid", "imagepath"])
