@@ -128,8 +128,13 @@ def preprocess_identity_candidates(
                         else:
                             seed_embeddings[seed_path] = seed
                 if reason is None:
+                    crop_bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
+                    # DEBUG: save first 2 crops for visual inspection
+                    if idx < 2:
+                        debug_path = rejected_root / f"_debug_crop_{idx:03d}.png"
+                        cv2.imwrite(str(debug_path), crop_bgr)
                     final_embedding, _, _ = get_embedding_and_attributes(
-                        app, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
+                        app, crop_bgr
                     )
                     if final_embedding is None:
                         reason = "no_face_in_final_crop"
