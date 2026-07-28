@@ -57,6 +57,7 @@ def preprocess_identity_candidates(
     output_root.mkdir(parents=True, exist_ok=True)
     rejected_root.mkdir(parents=True, exist_ok=True)
     app = load_arcface_model(ctxid)
+    app.det_model.thresh = 0.3  # InsightFace default is 0.5 — too strict for CPU
     seed_embeddings = {}
     accepted = []
     rejected = []
