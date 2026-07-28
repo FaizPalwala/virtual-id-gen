@@ -14,7 +14,6 @@ from collections import Counter
 from pathlib import Path
 
 import cv2
-import numpy as np
 import pandas as pd
 from insightface.utils import face_align
 from tqdm import tqdm
