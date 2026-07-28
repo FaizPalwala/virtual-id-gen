@@ -128,13 +128,13 @@ def preprocess_identity_candidates(
                         else:
                             seed_embeddings[seed_path] = seed
                 if reason is None:
-                    crop_bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
+                    # crop is already BGR (MTCNN alignment uses cv2.warpAffine on BGR input)
                     # DEBUG: save first 2 crops for visual inspection
                     if idx < 2:
                         debug_path = rejected_root / f"_debug_crop_{idx:03d}.png"
-                        cv2.imwrite(str(debug_path), crop_bgr)
+                        cv2.imwrite(str(debug_path), crop)
                     final_embedding, _, _ = get_embedding_and_attributes(
-                        app, crop_bgr
+                        app, crop
                     )
                     if final_embedding is None:
                         reason = "no_face_in_final_crop"
