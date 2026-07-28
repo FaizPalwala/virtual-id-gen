@@ -20,7 +20,11 @@ from PIL import Image
 from tqdm import tqdm
 
 from common import laplacian_variance, normalised_cosine_similarity
-from extract_embeddings import get_embedding_and_attributes, load_arcface_model
+from extract_embeddings import (
+    get_embedding_and_attributes,
+    get_embedding_and_attributes_robust,
+    load_arcface_model,
+)
 
 
 def _make_mtcnn(imgsize: int, confthreshold: float, device: str):
@@ -123,7 +127,9 @@ def preprocess_identity_candidates(
                     if seed_image is None:
                         reason = "seed_image_unreadable"
                     else:
-                        seed, _, _ = get_embedding_and_attributes(app, seed_image)
+                        seed, _, _ = get_embedding_and_attributes_robust(
+                            app, seed_image, ctxid
+                        )
                         if seed is None:
                             reason = "no_face_in_seed"
                         else:
