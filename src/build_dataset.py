@@ -38,6 +38,15 @@ def build_dataset(
         attributes, on="imagepath", how="inner", validate="one_to_one"
     )
     if len(final) != len(manifest):
+        print(f"Manifest: {len(manifest)} rows, final: {len(final)} rows")
+        print(f"  Manifest sample: {manifest['imagepath'].iloc[0]}")
+        print(f"  Attributes sample: {attributes['imagepath'].iloc[0]}")
+        only_manifest = set(manifest["imagepath"]) - set(attributes["imagepath"])
+        only_attrs = set(attributes["imagepath"]) - set(manifest["imagepath"])
+        if only_manifest:
+            print(f"  In manifest only ({len(only_manifest)}): {list(only_manifest)[:3]}")
+        if only_attrs:
+            print(f"  In attributes only ({len(only_attrs)}): {list(only_attrs)[:3]}")
         raise RuntimeError("Attribute extraction is missing final images.")
     sizes = final.groupby("clusterid").size()
     if sizes.nunique() != 1:

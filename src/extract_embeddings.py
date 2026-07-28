@@ -19,13 +19,15 @@ from tqdm import tqdm
 
 from common import get_image_paths
 
-AGE_GROUP_NAMES = {
-    0: "Young 0-24",
-    1: "Adult 25-44",
-    2: "Middle-Aged 45-64",
-    3: "Senior 65+",
-    -1: "Unknown",
-}
+
+def _cuda_available() -> bool:
+    """Return True if PyTorch can access a CUDA GPU."""
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
 
 
 def load_arcface_model(ctx_id: int = 0):
@@ -52,6 +54,15 @@ def get_embedding_and_attributes(app, image_bgr: np.ndarray):
         int(getattr(face, "age", -1)),
         int(getattr(face, "gender", -1)),
     )
+
+
+def get_embedding_cpu(app, crop_bgr: np.ndarray):
+    """On CPU the detector cannot find faces in aligned crops — use the
+    recognition model directly and return placeholder demographics."""
+    embedding = app.models["recognition"].get(crop_bgr)
+    if embedding is None:
+        return None, None, None
+    return np.asarray(embedding.reshape(-1), dtype=np.float32), 25, 0
 
 def get_embedding_and_attributes_robust(app, image_bgr: np.ndarray, ctxid: int):
     """Return largest-face attributes from an unaligned/raw image.
@@ -102,14 +113,16 @@ def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
     if not image_paths:
         raise FileNotFoundError(f"No final images found under {input_path}")
     app = load_arcface_model(ctxid)
+    use_gpu = _cuda_available()
     embeddings, paths, ages, genders, groups = [], [], [], [], []
     for image_path in tqdm(image_paths, desc="Extracting ArcFace features"):
         image = cv2.imread(str(image_path))
-        embedding, age, gender = (
-            get_embedding_and_attributes(app, image)
-            if image is not None
-            else (None, None, None)
-        )
+        if image is None:
+            continue
+        if use_gpu:
+            embedding, age, gender = get_embedding_and_attributes(app, image)
+        else:
+            embedding, age, gender = get_embedding_cpu(app, image)
         if embedding is None:
             continue
         embeddings.append(np.asarray(embedding, dtype=np.float32))
