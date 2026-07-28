@@ -19,11 +19,8 @@ import pandas as pd
 from insightface.utils import face_align
 from tqdm import tqdm
 
-from common import laplacian_variance, normalised_cosine_similarity
-from extract_embeddings import (
-    get_embedding_and_attributes_robust,
-    load_arcface_model,
-)
+from common import laplacian_variance
+from extract_embeddings import load_arcface_model
 
 
 def preprocess_identity_candidates(
@@ -33,16 +30,15 @@ def preprocess_identity_candidates(
     imgsize: int = 128,
     blurthreshold: float = 80.0,
     confthreshold: float = 0.3,
-    min_similarity_final: float = 0.45,
     ctxid: int = 0,
     max_candidates: int | None = None,
     strict: bool = True,
 ) -> str:
     """Create exactly ``imagesperidentity`` aligned final samples per cluster.
 
-    Candidates are ranked by final-crop ArcFace similarity, detection confidence,
-    and sharpness after thresholding.  The process aborts if any cluster cannot
-    satisfy the requested cardinality, preventing uneven identity clusters.
+    Candidates are ranked by detection confidence and sharpness after
+    thresholding.  The process aborts if any cluster cannot satisfy the
+    requested cardinality, preventing uneven identity clusters.
     """
     root = Path(identitydir)
     processed_root = Path(processeddir)
@@ -58,7 +54,6 @@ def preprocess_identity_candidates(
     rejected_root.mkdir(parents=True, exist_ok=True)
     app = load_arcface_model(ctxid)
     app.det_model.thresh = 0.3  # InsightFace default is 0.5 — too strict for CPU
-    seed_embeddings = {}
     accepted = []
     rejected = []
     loop_total = len(candidates)
@@ -79,7 +74,6 @@ def preprocess_identity_candidates(
         reason = None
         confidence = None
         sharpness = None
-        similarity = None
         try:
             img_bgr = cv2.imread(str(source))
             if img_bgr is None:
@@ -100,33 +94,9 @@ def preprocess_identity_candidates(
                 sharpness = laplacian_variance(crop_bgr)
                 if sharpness < blurthreshold:
                     reason = "blur"
-            if reason is None:
-                seed_path = str(row.seedpath)
-                if seed_path not in seed_embeddings:
-                    seed_image = cv2.imread(seed_path)
-                    if seed_image is None:
-                        reason = "seed_image_unreadable"
-                    else:
-                        seed, _, _ = get_embedding_and_attributes_robust(
-                            app, seed_image, ctxid
-                        )
-                        if seed is None:
-                            reason = "no_face_in_seed"
-                        else:
-                            seed_embeddings[seed_path] = seed
-                if reason is None:
-                    final_embedding = np.asarray(
-                        face.normed_embedding, dtype=np.float32
-                    )
-                    similarity = normalised_cosine_similarity(
-                        seed_embeddings[seed_path], final_embedding
-                    )
-                    if similarity < min_similarity_final:
-                        reason = "low_final_similarity"
             record = row._asdict() | {
                 "detection_confidence": confidence,
                 "laplacian_variance": sharpness,
-                "arcface_similarity": similarity,
                 "rejection_reason": reason,
             }
             if reason is None:
@@ -140,7 +110,6 @@ def preprocess_identity_candidates(
                 | {
                     "detection_confidence": confidence,
                     "laplacian_variance": sharpness,
-                    "arcface_similarity": similarity,
                     "rejection_reason": f"processing_error:{type(error).__name__}",
                 }
             )
@@ -169,7 +138,7 @@ def preprocess_identity_candidates(
     final_rows = []
     for cluster_id, group in pd.DataFrame(accepted).groupby("clusterid", sort=True):
         ranked = group.sort_values(
-            ["arcface_similarity", "detection_confidence", "laplacian_variance"],
+            ["detection_confidence", "laplacian_variance"],
             ascending=False,
         )
         if smoke_mode:
@@ -210,7 +179,6 @@ def preprocess_identity_candidates(
                 "final_images": len(final),
                 "rejected": len(rejected),
                 "imgsize": imgsize,
-                "min_similarity_final": min_similarity_final,
                 "candidate_manifest": str(manifest_path),
             },
             indent=2,
@@ -227,7 +195,6 @@ if __name__ == "__main__":
     parser.add_argument("--imgsize", type=int, default=128)
     parser.add_argument("--blurthreshold", type=float, default=80.0)
     parser.add_argument("--confthreshold", type=float, default=0.3)
-    parser.add_argument("--minsimilarityfinal", type=float, default=0.45)
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument(
         "--max-candidates",
@@ -249,7 +216,6 @@ if __name__ == "__main__":
         args.imgsize,
         args.blurthreshold,
         args.confthreshold,
-        args.minsimilarityfinal,
         args.ctxid,
         max_candidates=args.max_candidates,
         strict=args.strict,
