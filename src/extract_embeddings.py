@@ -76,7 +76,8 @@ def get_embedding_cpu(app, crop_bgr: np.ndarray):
 
     class _FaceStub:
         bbox = np.array([0, 0, w, h], dtype=np.float32)
-        kps = kps
+
+    _FaceStub.kps = kps  # class body scope can't capture enclosing local
 
     embedding = app.models["recognition"].get(crop_bgr, _FaceStub)
     if embedding is None:
