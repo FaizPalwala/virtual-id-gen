@@ -16,33 +16,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from PIL import Image
+from insightface.utils import face_align
 from tqdm import tqdm
 
 from common import laplacian_variance, normalised_cosine_similarity
 from extract_embeddings import (
-    get_embedding_and_attributes,
     get_embedding_and_attributes_robust,
     load_arcface_model,
 )
-
-
-def _make_mtcnn(imgsize: int, confthreshold: float, device: str):
-    """Build MTCNN lazily so modules can be imported without torch installed."""
-    import torch
-    from facenet_pytorch import MTCNN
-
-    resolved = (
-        ("cuda" if torch.cuda.is_available() else "cpu") if device == "auto" else device
-    )
-    return MTCNN(
-        image_size=imgsize,
-        margin=20,
-        keep_all=False,
-        min_face_size=40,
-        thresholds=[0.6, 0.7, confthreshold],
-        device=resolved,
-    )
 
 
 def preprocess_identity_candidates(
@@ -54,7 +35,6 @@ def preprocess_identity_candidates(
     confthreshold: float = 0.85,
     min_similarity_final: float = 0.45,
     ctxid: int = 0,
-    device: str = "auto",
     max_candidates: int | None = None,
     strict: bool = True,
 ) -> str:
@@ -76,7 +56,6 @@ def preprocess_identity_candidates(
     shutil.rmtree(output_root, ignore_errors=True)
     output_root.mkdir(parents=True, exist_ok=True)
     rejected_root.mkdir(parents=True, exist_ok=True)
-    mtcnn = _make_mtcnn(imgsize, confthreshold, device)
     app = load_arcface_model(ctxid)
     seed_embeddings = {}
     accepted = []
@@ -101,23 +80,23 @@ def preprocess_identity_candidates(
         sharpness = None
         similarity = None
         try:
-            image = Image.open(source).convert("RGB")
-            face_tensor, probabilities = mtcnn(image, return_prob=True)
-            if face_tensor is None or probabilities is None:
-                reason = "no_face_after_generation"
+            img_bgr = cv2.imread(str(source))
+            if img_bgr is None:
+                reason = "image_unreadable"
             else:
-                confidence = float(
-                    probabilities if np.isscalar(probabilities) else probabilities[0]
-                )
-                if confidence < confthreshold:
-                    reason = "low_detection_confidence"
+                faces = app.get(img_bgr)
+                if not faces:
+                    reason = "no_face_after_generation"
+                else:
+                    face = max(faces, key=lambda f: f.det_score)
+                    confidence = float(face.det_score)
+                    if confidence < confthreshold:
+                        reason = "low_detection_confidence"
             if reason is None:
-                crop = (
-                    ((face_tensor.permute(1, 2, 0).numpy() + 1.0) * 127.5)
-                    .clip(0, 255)
-                    .astype(np.uint8)
+                crop_bgr = face_align.norm_crop(
+                    img_bgr, face.landmark, image_size=imgsize
                 )
-                sharpness = laplacian_variance(crop)
+                sharpness = laplacian_variance(crop_bgr)
                 if sharpness < blurthreshold:
                     reason = "blur"
             if reason is None:
@@ -135,25 +114,14 @@ def preprocess_identity_candidates(
                         else:
                             seed_embeddings[seed_path] = seed
                 if reason is None:
-                    # MTCNN produces a tight 128×128 crop — InsightFace's
-                    # detector needs context around the face.  Pad 33 % and
-                    # convert the PyTorch RGB tensor to OpenCV BGR.
-                    pad = crop.shape[0] // 3
-                    crop_padded = cv2.copyMakeBorder(
-                        crop, pad, pad, pad, pad, cv2.BORDER_REFLECT_101
+                    final_embedding = np.asarray(
+                        face.normed_embedding, dtype=np.float32
                     )
-                    crop_bgr = cv2.cvtColor(crop_padded, cv2.COLOR_RGB2BGR)
-                    final_embedding, _, _ = get_embedding_and_attributes(
-                        app, crop_bgr
+                    similarity = normalised_cosine_similarity(
+                        seed_embeddings[seed_path], final_embedding
                     )
-                    if final_embedding is None:
-                        reason = "no_face_in_final_crop"
-                    else:
-                        similarity = normalised_cosine_similarity(
-                            seed_embeddings[seed_path], final_embedding
-                        )
-                        if similarity < min_similarity_final:
-                            reason = "low_final_similarity"
+                    if similarity < min_similarity_final:
+                        reason = "low_final_similarity"
             record = row._asdict() | {
                 "detection_confidence": confidence,
                 "laplacian_variance": sharpness,
@@ -260,7 +228,6 @@ if __name__ == "__main__":
     parser.add_argument("--confthreshold", type=float, default=0.85)
     parser.add_argument("--minsimilarityfinal", type=float, default=0.45)
     parser.add_argument("--ctxid", type=int, default=0)
-    parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--max-candidates",
         type=int,
@@ -283,7 +250,6 @@ if __name__ == "__main__":
         args.confthreshold,
         args.minsimilarityfinal,
         args.ctxid,
-        args.device,
         max_candidates=args.max_candidates,
         strict=args.strict,
     )
