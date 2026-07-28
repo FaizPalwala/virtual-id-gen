@@ -171,6 +171,15 @@ def preprocess_identity_candidates(
             record["imagepath"] = str(final_path)
             final_rows.append(record)
     final = pd.DataFrame(final_rows).sort_values(["clusterid", "imagepath"])
+    final = final[
+        [
+            "clusterid",
+            "trial",
+            "imagepath",
+            "detection_confidence",
+            "laplacian_variance",
+        ]
+    ]
     final.to_csv(processed_root / "identitymanifest.csv", index=False)
     (processed_root / "preprocessing_metadata.json").write_text(
         json.dumps(
