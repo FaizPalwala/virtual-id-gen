@@ -32,7 +32,7 @@ def preprocess_identity_candidates(
     imagesperidentity: int,
     imgsize: int = 128,
     blurthreshold: float = 80.0,
-    confthreshold: float = 0.85,
+    confthreshold: float = 0.3,
     min_similarity_final: float = 0.45,
     ctxid: int = 0,
     max_candidates: int | None = None,
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     parser.add_argument("--imagesperidentity", type=int, required=True)
     parser.add_argument("--imgsize", type=int, default=128)
     parser.add_argument("--blurthreshold", type=float, default=80.0)
-    parser.add_argument("--confthreshold", type=float, default=0.85)
+    parser.add_argument("--confthreshold", type=float, default=0.3)
     parser.add_argument("--minsimilarityfinal", type=float, default=0.45)
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument(
