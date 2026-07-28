@@ -114,35 +114,27 @@ def build_dataset(
 
         # Asymmetric grid: seed spans left column (3 rows), variations stack right.
         img_list = [Image.open(p).convert("RGB") for p in image_paths]
-        cell_w, cell_h = img_list[0].size  # all same size from preprocess
+        cell_w, cell_h = img_list[0].size
 
-        fig, axes = plt.subplots(
-            3, 2, figsize=(10, 7.5), facecolor="#f8f9fa",
-            gridspec_kw={"width_ratios": [2.2, 1], "hspace": 0.25, "wspace": 0.15},
+        fig = plt.figure(figsize=(10, 7.5), facecolor="#f8f9fa")
+        gs = fig.add_gridspec(
+            3, 2, width_ratios=[2.2, 1], hspace=0.25, wspace=0.15,
         )
+        ax_seed = fig.add_subplot(gs[:, 0])  # spans all left cells
+        ax_vars = [fig.add_subplot(gs[i, 1]) for i in range(3)]
 
-        # Seed image — left column, all 3 rows
-        axes[0, 0].imshow(img_list[0])
-        axes[0, 0].set_title("SEED", fontsize=9, fontweight="bold", color="#c0392b", pad=4)
-        axes[0, 0].axis("off")
-        for spine in axes[0, 0].spines.values():
-            spine.set_visible(True)
-            spine.set_color("#c0392b")
-            spine.set_linewidth(2.5)
-        # Merge the 3 left cells
-        axes[1, 0].remove()
-        axes[2, 0].remove()
-        ax_seed = fig.add_subplot(3, 2, (1, 3, 5))
         ax_seed.imshow(img_list[0])
+        ax_seed.set_title(
+            "SEED", fontsize=9, fontweight="bold", color="#c0392b", pad=4,
+        )
         ax_seed.axis("off")
         for spine in ax_seed.spines.values():
             spine.set_visible(True)
             spine.set_color("#c0392b")
             spine.set_linewidth(3)
 
-        # Variation images — stacked right column
         for i in range(1, min(4, len(img_list))):
-            ax = axes[i - 1, 1]
+            ax = ax_vars[i - 1]
             ax.imshow(img_list[i])
             ax.set_title(f"Example {i}", fontsize=8, color="#555", pad=3)
             ax.axis("off")
@@ -152,9 +144,8 @@ def build_dataset(
             )
             ax.add_patch(rect)
 
-        # Hide any unused subplots (if fewer than 4 images)
         for j in range(len(img_list) - 1, 3):
-            axes[j, 1].axis("off")
+            ax_vars[j].axis("off")
 
         fig.suptitle(
             f"Identity {int(cid):03d} — {split.upper()}",
