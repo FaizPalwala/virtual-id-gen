@@ -8,6 +8,7 @@ Build the backward-compatible final ``dataset.csv`` file.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +60,36 @@ def build_dataset(
         .astype(int)
     )
     final = final[final.agegroup != -1].copy()
+
+    # Cluster samples: seed + 3 examples per identity, organised by split.
+    samples_root = Path(outputdir) / "cluster_samples"
+    shutil.rmtree(samples_root, ignore_errors=True)
+
+    raw_manifest = Path(identitydir) / "raw_candidate_manifest.csv"
+    if raw_manifest.exists():
+        seeds = (
+            pd.read_csv(raw_manifest)[["clusterid", "seedpath"]]
+            .drop_duplicates("clusterid")
+            .set_index("clusterid")
+            .seedpath
+        )
+    else:
+        seeds = pd.Series(dtype=str)
+
+    for cid in sorted(final.clusterid.unique()):
+        split = split_map[cid]
+        dest = samples_root / split / f"identity_{int(cid):03d}"
+        dest.mkdir(parents=True, exist_ok=True)
+
+        seed_path = seeds.get(cid, None)
+        if seed_path and Path(seed_path).exists():
+            shutil.copy(seed_path, dest / f"seed_{Path(seed_path).name}")
+
+        examples = final[final.clusterid == cid].imagepath.head(3)
+        for i, img_path in enumerate(examples, 1):
+            if Path(img_path).exists():
+                shutil.copy(img_path, dest / f"example_{i}_{Path(img_path).name}")
+
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
     output_df = final[OUTPUT_COLUMNS]
