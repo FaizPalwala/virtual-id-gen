@@ -17,8 +17,10 @@ omegaconf>=2.3.0
 diffusers 
 transformers 
 huggingface_hub
-accelerate 
-insightface 
+accelerate
+insightface
 opencv-python
+pyarrow>=14.0
+fastparquet>=2024.0
 # xformers — install separately with a CUDA-matched build:
 #     pip install xformers --index-url https://download.pytorch.org/whl/cu124
