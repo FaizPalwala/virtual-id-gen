@@ -45,7 +45,7 @@ def preprocess_identity_candidates(
     imagesperidentity: int,
     imgsize: int = 128,
     blurthreshold: float = 80.0,
-    confthreshold: float = 0.1,
+    confthreshold: float = 0.7,
     ctxid: int = 0,
     max_candidates: int | None = None,
     strict: bool = True,
@@ -70,9 +70,17 @@ def preprocess_identity_candidates(
     rejected_root.mkdir(parents=True, exist_ok=True)
 
     app = load_arcface_model(ctxid)
-    app.det_model.thresh = 0.3
     mtcnn = _make_mtcnn(imgsize, confthreshold)
-    _conf = confthreshold  # 0.3 default for InsightFace
+
+    # InsightFace det_score ranges differ by ONNX execution provider.
+    # GPU (CUDA)  → scores 0.5–0.9  → threshold 0.3 is reasonable.
+    # CPU / CoreML → scores 0.1–0.4  → threshold 0.15 is more appropriate.
+    import onnxruntime as ort
+
+    _cuda_available = "CUDAExecutionProvider" in ort.get_available_providers()
+    _insightface_conf = 0.15 if not _cuda_available else 0.3
+    app.det_model.thresh = _insightface_conf
+    _mtcnn_conf = 0.85  # MTCNN probability scale — independent of ONNX EP
 
     accepted = []
     rejected = []
@@ -111,13 +119,13 @@ def preprocess_identity_candidates(
                         confidence = float(
                             probs if np.isscalar(probs) else probs[0]
                         )
-                        if confidence < confthreshold:
+                        if confidence < _mtcnn_conf:
                             reason = "low_detection_confidence"
                 else:
                     insface_ok = True
                     face = max(faces, key=lambda f: f.det_score)
                     confidence = float(face.det_score)
-                    if confidence < _conf:
+                    if confidence < _insightface_conf:
                         reason = "low_detection_confidence"
             if reason is None:
                 if insface_ok:
@@ -243,7 +251,7 @@ if __name__ == "__main__":
     parser.add_argument("--imagesperidentity", type=int, required=True)
     parser.add_argument("--imgsize", type=int, default=128)
     parser.add_argument("--blurthreshold", type=float, default=80.0)
-    parser.add_argument("--confthreshold", type=float, default=0.3)
+    parser.add_argument("--confthreshold", type=float, default=0.7)
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument(
         "--max-candidates",
