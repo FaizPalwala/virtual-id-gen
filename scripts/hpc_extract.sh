@@ -52,9 +52,13 @@ echo "[$(date)] Starting embedding extraction..."
 
 cd "$REPO_DIR/src"
 
+# python main.py --config-name step4_extract \
+#     dataset.dataroot="$DATA_DIR/merged" \
+#     > "$REPO_DIR/logs/extract_${SLURM_JOB_ID}.log" 2>&1
+
 python main.py --config-name step4_extract \
-    dataset.dataroot="$DATA_DIR/merged" \
-    > "$REPO_DIR/logs/extract_${SLURM_JOB_ID}.log" 2>&1
+    dataset.dataroot="$DATA_DIR" \
+    > "$REPO_DIR/logs/extract_hyb_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
 echo "[$(date)] Extract finished (exit $EXIT_CODE)"
