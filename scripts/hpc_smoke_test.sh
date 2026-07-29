@@ -36,7 +36,7 @@ echo "[$(date)] Setting up environment..."
 module purge  2>/dev/null || true
 module load miniforge 2>/dev/null || true
 module load cuda/12.6.2 2>/dev/null || true
-conda activate data_gen2 2>/dev/null || true
+conda activate data_gen 2>/dev/null || true
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
