@@ -24,6 +24,21 @@ OUTPUT_COLUMNS = [
 ]
 
 
+def _normalise_image_path(path_str: str) -> str:
+    """Strip machine-specific prefix, keeping the stable relative suffix.
+
+    Absolute paths vary by machine (macOS vs HPC), but the portion from
+    ``images/`` onward is identical.  This lets us merge manifests and
+    attributes generated on different hosts.
+    """
+    parts = Path(path_str).parts
+    try:
+        idx = parts.index("images")
+        return str(Path(*parts[idx:]))
+    except ValueError:
+        return path_str
+
+
 def build_dataset(
     identitydir: str,
     embeddingsdir: str,
@@ -43,19 +58,25 @@ def build_dataset(
             "gender": np.load(embeddings / "genders.npy"),
         }
     )
-    final = manifest[["imagepath", "clusterid"]].merge(
-        attributes, on="imagepath", how="inner", validate="one_to_one"
-    )
+    # Normalise to machine-agnostic relative paths for cross-host merge.
+    manifest["_rel"] = manifest["imagepath"].apply(_normalise_image_path)
+    attributes["_rel"] = attributes["imagepath"].apply(_normalise_image_path)
+    final = manifest[["_rel", "imagepath", "clusterid"]].merge(
+        attributes[["_rel", "agegroup", "age", "gender"]],
+        on="_rel", how="inner", validate="one_to_one",
+    ).drop(columns="_rel")
     if len(final) != len(manifest):
         print(f"Manifest: {len(manifest)} rows, final: {len(final)} rows")
         print(f"  Manifest sample: {manifest['imagepath'].iloc[0]}")
         print(f"  Attributes sample: {attributes['imagepath'].iloc[0]}")
-        only_manifest = set(manifest["imagepath"]) - set(attributes["imagepath"])
-        only_attrs = set(attributes["imagepath"]) - set(manifest["imagepath"])
+        manifest_rels = set(manifest["imagepath"].apply(_normalise_image_path))
+        attr_rels = set(attributes["imagepath"].apply(_normalise_image_path))
+        only_manifest = manifest_rels - attr_rels
+        only_attrs = attr_rels - manifest_rels
         if only_manifest:
-            print(f"  In manifest only ({len(only_manifest)}): {list(only_manifest)[:3]}")
+            print(f"  In manifest only ({len(only_manifest)}): {sorted(only_manifest)[:3]}")
         if only_attrs:
-            print(f"  In attributes only ({len(only_attrs)}): {list(only_attrs)[:3]}")
+            print(f"  In attributes only ({len(only_attrs)}): {sorted(only_attrs)[:3]}")
         raise RuntimeError("Attribute extraction is missing final images.")
     sizes = final.groupby("clusterid").size()
     if sizes.nunique() != 1:
