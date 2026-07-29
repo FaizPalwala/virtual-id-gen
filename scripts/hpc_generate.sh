@@ -30,6 +30,7 @@ module purge
 module load miniforge
 module load cuda/12.6.2
 conda activate data_gen
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # ==========================================
 # 2. Path Variables & Caching
