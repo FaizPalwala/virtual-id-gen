@@ -28,7 +28,10 @@ def load_arcface_model(ctx_id: int = 0):
         raise ImportError(
             "Install insightface and an ONNX Runtime provider."
         ) from error
-    app = FaceAnalysis(allowed_modules=["detection", "recognition", "genderage"])
+    app = FaceAnalysis(
+        allowed_modules=["detection", "recognition", "genderage"],
+        providers=['CUDAExecutionProvider', 'CPUExecutionProvider'],
+    )
     app.prepare(ctx_id=ctx_id, det_size=(640, 640))
     return app
 
