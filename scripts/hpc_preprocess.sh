@@ -27,7 +27,7 @@
 # ==========================================
 module purge
 module load miniforge
-module load cuda
+module load cuda/12.6.2
 conda activate data_gen
 
 # ==========================================
