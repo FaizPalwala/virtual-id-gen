@@ -40,7 +40,7 @@ echo "[$(date)] Assembling final dataset..."
 cd "$REPO_DIR/src"
 
 python main.py --config-name step5_build \
-    dataset.dataroot="$DATA_DIR/merged" \
+    dataset.dataroot="$DATA_DIR" \
     > "$REPO_DIR/logs/build_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?

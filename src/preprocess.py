@@ -216,7 +216,7 @@ def preprocess_identity_candidates(
         ):
             final_path = destination / f"accepted_{index:03d}.jpg"
             cv2.imwrite(str(final_path), record.pop("_crop"))
-            record["imagepath"] = str(final_path)
+            record["imagepath"] = str(final_path.relative_to(processed_root))
             final_rows.append(record)
     final = pd.DataFrame(final_rows).sort_values(["clusterid", "imagepath"])
     final = final[

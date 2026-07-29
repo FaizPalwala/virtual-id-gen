@@ -24,21 +24,6 @@ OUTPUT_COLUMNS = [
 ]
 
 
-def _normalise_image_path(path_str: str) -> str:
-    """Strip machine-specific prefix, keeping the stable relative suffix.
-
-    Absolute paths vary by machine (macOS vs HPC), but the portion from
-    ``images/`` onward is identical.  This lets us merge manifests and
-    attributes generated on different hosts.
-    """
-    parts = Path(path_str).parts
-    try:
-        idx = parts.index("images")
-        return str(Path(*parts[idx:]))
-    except ValueError:
-        return path_str
-
-
 def build_dataset(
     identitydir: str,
     embeddingsdir: str,
@@ -58,21 +43,15 @@ def build_dataset(
             "gender": np.load(embeddings / "genders.npy"),
         }
     )
-    # Normalise to machine-agnostic relative paths for cross-host merge.
-    manifest["_rel"] = manifest["imagepath"].apply(_normalise_image_path)
-    attributes["_rel"] = attributes["imagepath"].apply(_normalise_image_path)
-    final = manifest[["_rel", "imagepath", "clusterid"]].merge(
-        attributes[["_rel", "agegroup", "age", "gender"]],
-        on="_rel", how="inner", validate="one_to_one",
-    ).drop(columns="_rel")
+    final = manifest[["imagepath", "clusterid"]].merge(
+        attributes, on="imagepath", how="inner", validate="one_to_one"
+    )
     if len(final) != len(manifest):
         print(f"Manifest: {len(manifest)} rows, final: {len(final)} rows")
         print(f"  Manifest sample: {manifest['imagepath'].iloc[0]}")
         print(f"  Attributes sample: {attributes['imagepath'].iloc[0]}")
-        manifest_rels = set(manifest["imagepath"].apply(_normalise_image_path))
-        attr_rels = set(attributes["imagepath"].apply(_normalise_image_path))
-        only_manifest = manifest_rels - attr_rels
-        only_attrs = attr_rels - manifest_rels
+        only_manifest = set(manifest["imagepath"]) - set(attributes["imagepath"])
+        only_attrs = set(attributes["imagepath"]) - set(manifest["imagepath"])
         if only_manifest:
             print(f"  In manifest only ({len(only_manifest)}): {sorted(only_manifest)[:3]}")
         if only_attrs:
@@ -110,7 +89,7 @@ def build_dataset(
         shutil.rmtree(samples_root)
     samples_root.mkdir(parents=True)
 
-    raw_manifest = Path(identitydir).parent / "merged" / "identities" / "raw_candidate_manifest.csv"
+    raw_manifest = Path(identitydir).parent / "identities" / "raw_candidate_manifest.csv"
     if not raw_manifest.exists():
         raw_manifest = Path(identitydir) / "identities" / "raw_candidate_manifest.csv"
     if raw_manifest.exists():
@@ -133,9 +112,11 @@ def build_dataset(
         if seed_path and Path(seed_path).exists():
             image_paths.append(seed_path)
         examples = final[final.clusterid == cid].imagepath.head(3)
+        identity_root = Path(identitydir)
         for i, img_path in enumerate(examples, 1):
-            if Path(img_path).exists():
-                image_paths.append(img_path)
+            resolved = identity_root / img_path
+            if resolved.exists():
+                image_paths.append(str(resolved))
 
         if not image_paths:
             continue
@@ -196,7 +177,7 @@ def build_dataset(
     )[OUTPUT_COLUMNS]
     output_df["image_path"] = (
         output_df["image_path"]
-        .apply(lambda p: str(Path(p).relative_to(dataroot)))
+        .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
     )
     csv_path = output / "dataset.csv"
     parquet_path = output / "dataset.parquet"

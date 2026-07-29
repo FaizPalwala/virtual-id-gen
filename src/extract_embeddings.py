@@ -137,7 +137,7 @@ def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
         if embedding is None:
             continue
         embeddings.append(np.asarray(embedding, dtype=np.float32))
-        paths.append(str(image_path))
+        paths.append(str(image_path.relative_to(input_path.parent)))
         ages.append(age)
         genders.append(gender)
         groups.append(age_to_group(age))

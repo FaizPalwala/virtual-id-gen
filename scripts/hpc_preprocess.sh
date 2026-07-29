@@ -61,7 +61,7 @@ echo "[$(date)] Starting preprocessing (face alignment + quality filtering)..."
 cd "$REPO_DIR/src"
 
 python main.py --config-name step3_preprocess \
-    dataset.dataroot="$DATA_DIR/merged" \
+    dataset.dataroot="$DATA_DIR" \
     > "$REPO_DIR/logs/preprocess_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
