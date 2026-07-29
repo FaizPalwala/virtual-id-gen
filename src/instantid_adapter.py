@@ -298,12 +298,23 @@ class InstantIDGeneratorSession:
         controlnet = ControlNetModel.from_pretrained(
             controlnet_path, torch_dtype=self.runtime.dtype
         )
+        # Load pipeline components from SDXL base (text encoder, VAE, scheduler).
+        # Fine-tuned models like Juggernaut-XL-v9 only ship UNet weights;
+        # loading the full pipeline from them fails with missing text_encoder.
+        from diffusers import UNet2DConditionModel
+
         self.pipeline = DiffusionPipeline.from_pretrained(
-            base_model,
+            "stabilityai/stable-diffusion-xl-base-1.0",
             controlnet=controlnet,
             torch_dtype=self.runtime.dtype,
             custom_pipeline="pipeline_stable_diffusion_xl_instantid",
-        ).to(self.runtime.device)
+        )
+        if base_model != DEFAULT_BASE_MODEL:
+            unet = UNet2DConditionModel.from_pretrained(
+                base_model, subfolder="unet", torch_dtype=self.runtime.dtype
+            ).to(self.runtime.device)
+            self.pipeline.unet = unet
+        self.pipeline = self.pipeline.to(self.runtime.device)
         patch_legacy_instantid_check_inputs(self.pipeline)
         self.pipeline.load_ip_adapter_instantid(adapter_path)
         self.pipeline.set_ip_adapter_scale(float(ip_adapter_scale))
