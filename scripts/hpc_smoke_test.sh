@@ -1,9 +1,10 @@
 #!/bin/bash
 # ==========================================
-# hpc_smoke_test.sh — Minimal end-to-end validation (1 identity)
+# hpc_smoke_test.sh — Juggernaut-XL-v9 validation (4 ids × 3 imgs)
 # ==========================================
-# Submits a single-GPU job that generates one identity and verifies
-# the output images are not solid black.  Runs in ~15 minutes.
+# Submits a single-GPU job that generates 4 identities (3 candidates each)
+# using RunDiffusion/Juggernaut-XL-v9 and verifies output is non-black.
+# Runs in ~10–15 minutes.
 #
 # BEFORE SUBMITTING:
 #   mkdir -p logs
@@ -21,11 +22,10 @@
 #SBATCH --output=logs/smoke_%j.out
 #SBATCH --error=logs/smoke_%j.err
 
-set -eo pipefail  # dropped -u: TMPDIR naming varies across Slurm sites
+set -eo pipefail
 
-# Print immediately so we know the job started
 echo "========================================="
-echo "[$(date)] Smoke test started (job $SLURM_JOB_ID)"
+echo "[$(date)] Juggernaut-XL-v9 smoke test (job $SLURM_JOB_ID)"
 echo "========================================="
 
 # ==========================================
@@ -35,8 +35,9 @@ echo "[$(date)] Setting up environment..."
 
 module purge  2>/dev/null || true
 module load miniforge 2>/dev/null || true
-module load cuda 2>/dev/null || true
-conda activate data_gen 2>/dev/null || true
+module load cuda/12.6.2 2>/dev/null || true
+conda activate data_gen2 2>/dev/null || true
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
@@ -60,7 +61,6 @@ echo "  CACHE_DIR = $CACHE_DIR"
 # ==========================================
 # 2. Stage to node-local scratch
 # ==========================================
-# TMPDIR naming varies — try common Slurm env vars
 SCRATCH_ROOT="${TMPDIR:-${LOCAL_SCRATCH:-${SCRATCH:-/tmp}}}"
 SMOKE_TMP="$SCRATCH_ROOT/smoke_${SLURM_JOB_ID}"
 mkdir -p "$SMOKE_TMP/repo" "$SMOKE_TMP/data"
@@ -71,7 +71,8 @@ if [ -d "$DATA_DIR/raw" ]; then
     cp -r "$DATA_DIR/raw" "$SMOKE_TMP/data/raw"
     echo "  Copied source images: $(ls "$SMOKE_TMP/data/raw" | wc -l) files"
 else
-    echo "  WARNING: $DATA_DIR/raw not found — source images missing?"
+    echo "  FAIL: $DATA_DIR/raw not found — source images missing?"
+    exit 1
 fi
 
 # ==========================================
@@ -82,29 +83,29 @@ if [ -f "$SMOKE_TMP/repo/scripts/gpu_preflight.sh" ]; then
     bash "$SMOKE_TMP/repo/scripts/gpu_preflight.sh" || {
         echo "WARNING: GPU preflight had non-zero exit — continuing anyway"
     }
-else
-    echo "WARNING: gpu_preflight.sh not found — skipping"
 fi
 
 # ==========================================
-# 4. Generate 1 Identity (39 candidates)
+# 4. Generate 4 Identities × 3 Candidates (Juggernaut-XL-v9)
 # ==========================================
-SMOKE_DATA="$SMOKE_TMP/smoke_data"
+SMOKE_DATA="$SMOKE_TMP/smoke_gen"
 mkdir -p "$SMOKE_DATA/raw"
 
 if [ -d "$SMOKE_TMP/data/raw" ]; then
     cp -r "$SMOKE_TMP/data/raw/." "$SMOKE_DATA/raw/"
 fi
 
-echo "[$(date)] Generating 1 identity (39 candidates)..."
+echo "[$(date)] Generating 4 identities × 3 candidates (Juggernaut-XL-v9)..."
 cd "$SMOKE_TMP/repo/src"
 
-python main.py --config-name step3_generate \
+python main.py --config-name step2_generate \
     dataset.dataroot="$SMOKE_DATA" \
-    dataset.nidentities=1 \
+    dataset.nidentities=4 \
+    dataset.candidatesperidentity=3 \
     dataset.seed=42 \
     dataset.nforget=0 \
     dataset.ntest=0 \
+    pipeline.instantid.base_model="RunDiffusion/Juggernaut-XL-v9" \
     > "$REPO_DIR/logs/smoke_generate_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
@@ -113,66 +114,68 @@ echo "[$(date)] Generation finished (exit $EXIT_CODE)"
 if [ $EXIT_CODE -ne 0 ]; then
     echo "FAIL: generate step crashed (exit $EXIT_CODE)"
     echo "Log: logs/smoke_generate_${SLURM_JOB_ID}.log"
-    echo "========================================="
     exit $EXIT_CODE
 fi
 
 # ==========================================
-# 5. Verify output images are not black
+# 5. Verify output
 # ==========================================
-IDENTITY_DIR=$(find "$SMOKE_DATA/identities" -type d -name "identity_*" 2>/dev/null | head -1)
+IDENTITY_DIRS=$(find "$SMOKE_DATA/identities" -type d -name "identity_*" 2>/dev/null | sort)
+IDENTITY_COUNT=$(echo "$IDENTITY_DIRS" | grep -c "identity_" || true)
 
-if [ -z "$IDENTITY_DIR" ]; then
-    echo "FAIL: no identity directory found under $SMOKE_DATA/identities"
-    echo "Contents of $SMOKE_DATA:"
-    find "$SMOKE_DATA" -type d 2>/dev/null | head -20
-    echo "========================================="
+echo "[$(date)] Verifying output..."
+echo "  Found $IDENTITY_COUNT identity directories (expected 4)"
+
+if [ "$IDENTITY_COUNT" -ne 4 ]; then
+    echo "FAIL: expected 4 identity dirs, got $IDENTITY_COUNT"
+    find "$SMOKE_DATA/identities" -type d 2>/dev/null | head -20
     exit 1
 fi
 
-echo "[$(date)] Verifying candidates in $IDENTITY_DIR..."
-
 BLACK_COUNT=0
 TOTAL=0
-FIRST_BLACK=""
 
-for img in "$IDENTITY_DIR"/candidate_*.png; do
-    [ -f "$img" ] || continue
-    TOTAL=$((TOTAL + 1))
-    IS_BLACK=$(python3 -c "
+for id_dir in $IDENTITY_DIRS; do
+    CANDIDATE_COUNT=$(find "$id_dir" -name "candidate_*.png" 2>/dev/null | wc -l | tr -d ' ')
+    echo "  $(basename "$id_dir"): $CANDIDATE_COUNT candidates"
+
+    for img in "$id_dir"/candidate_*.png; do
+        [ -f "$img" ] || continue
+        TOTAL=$((TOTAL + 1))
+        IS_BLACK=$(python3 -c "
 import numpy as np
 from PIL import Image
 arr = np.array(Image.open('$img').convert('RGB'))
 print(1 if arr.max() < 5 else 0)
 " 2>/dev/null || echo "2")
 
-    if [ "$IS_BLACK" = "1" ]; then
-        BLACK_COUNT=$((BLACK_COUNT + 1))
-        [ -z "$FIRST_BLACK" ] && FIRST_BLACK="$img"
-    elif [ "$IS_BLACK" = "2" ]; then
-        echo "  WARNING: PIL check failed for $(basename "$img") (env issue, not image bug)"
-    fi
+        if [ "$IS_BLACK" = "1" ]; then
+            BLACK_COUNT=$((BLACK_COUNT + 1))
+            echo "    BLACK: $(basename "$img")"
+        elif [ "$IS_BLACK" = "2" ]; then
+            echo "    WARNING: PIL check failed for $(basename "$img")"
+        fi
+    done
 done
 
 echo ""
 echo "========================================="
 if [ $BLACK_COUNT -gt 0 ]; then
     echo "FAIL: $BLACK_COUNT/$TOTAL images are solid black"
-    echo "First black: $FIRST_BLACK"
     exit 1
 else
-    echo "PASS: All $TOTAL candidate images have non-zero pixels"
+    echo "PASS: All $TOTAL images non-black ($IDENTITY_COUNT identities)"
 fi
 
 # ==========================================
-# 6. Sync results back to persistent storage
+# 6. Sync results to persistent storage
 # ==========================================
-SMOKE_OUT="$DATA_DIR/smoke_${SLURM_JOB_ID}"
+SMOKE_OUT="$DATA_DIR/smoke_gen"
+rm -rf "$SMOKE_OUT" 2>/dev/null || true
 mkdir -p "$SMOKE_OUT"
 echo "[$(date)] Syncing results to $SMOKE_OUT..."
-rsync -av "$IDENTITY_DIR/" "$SMOKE_OUT/" 2>&1 | tail -3
+rsync -av "$SMOKE_DATA/identities/" "$SMOKE_OUT/identities/" 2>&1 | tail -3
 echo "Results persisted at: $SMOKE_OUT"
 
-echo "Smoke test directory (tmp): $SMOKE_DATA/identities"
 echo "========================================="
-echo "[$(date)] Smoke test complete — PASS"
+echo "[$(date)] Juggernaut-XL-v9 smoke test — PASS"
