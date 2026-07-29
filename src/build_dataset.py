@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
-OUTPUT_COLUMNS = ["imagepath", "clusterid", "agegroup", "split", "forgetstep"]
+OUTPUT_COLUMNS = ["image_path", "clusterid", "age_group", "split", "forget_step"]
 
 
 def build_dataset(
@@ -158,9 +158,15 @@ def build_dataset(
     # ------------------------------------------------------------------
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
-    output_df = final[OUTPUT_COLUMNS]
-    csv_path = output / "dataset.csv"
-    parquet_path = output / "dataset.parquet"
+    output_df = final.rename(
+        columns={
+            "imagepath": "image_path",
+            "agegroup": "age_group",
+            "forgetstep": "forget_step",
+        }
+    )[OUTPUT_COLUMNS]
+    csv_path = output / "sfhq_dataset.csv"
+    parquet_path = output / "sfhq_dataset.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
     (output / "datasetsummary.json").write_text(
