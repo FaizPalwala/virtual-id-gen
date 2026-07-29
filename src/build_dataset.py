@@ -165,6 +165,7 @@ def build_dataset(
     # ------------------------------------------------------------------
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
+    dataroot = output.parent
     output_df = final.rename(
         columns={
             "imagepath": "image_path",
@@ -172,8 +173,12 @@ def build_dataset(
             "forgetstep": "forget_step",
         }
     )[OUTPUT_COLUMNS]
-    csv_path = output / "dataset.csv"
-    parquet_path = output / "dataset.parquet"
+    output_df["image_path"] = (
+        output_df["image_path"]
+        .apply(lambda p: str(Path(p).relative_to(dataroot)))
+    )
+    csv_path = output / "sfhq_dataset.csv"
+    parquet_path = output / "sfhq_dataset.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
     (output / "datasetsummary.json").write_text(
