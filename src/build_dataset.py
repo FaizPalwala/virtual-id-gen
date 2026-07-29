@@ -18,7 +18,10 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
-OUTPUT_COLUMNS = ["image_path", "clusterid", "age_group", "split", "forget_step"]
+OUTPUT_COLUMNS = [
+    "image_path", "clusterid", "age_group", "age", "gender",
+    "split", "forget_step",
+]
 
 
 def build_dataset(
@@ -36,6 +39,8 @@ def build_dataset(
         {
             "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
             "agegroup": np.load(embeddings / "agegroups.npy"),
+            "age": np.load(embeddings / "ages.npy"),
+            "gender": np.load(embeddings / "genders.npy"),
         }
     )
     final = manifest[["imagepath", "clusterid"]].merge(
@@ -68,7 +73,9 @@ def build_dataset(
     )
     final["split"] = final.clusterid.map(split_map)
     final["forgetstep"] = (
-        final.clusterid.map({identity: step for step, identity in enumerate(forget)})
+        final.clusterid.map(
+            {identity: step // 2 for step, identity in enumerate(forget)}
+        )
         .fillna(-1)
         .astype(int)
     )
