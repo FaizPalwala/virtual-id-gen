@@ -310,8 +310,20 @@ class InstantIDGeneratorSession:
             custom_pipeline="pipeline_stable_diffusion_xl_instantid",
         )
         if base_model != DEFAULT_BASE_MODEL:
-            unet = UNet2DConditionModel.from_pretrained(
-                base_model, subfolder="unet", torch_dtype=self.runtime.dtype
+            # Fine-tuned models like Juggernaut-XL-v9 are distributed as
+            # single .safetensors checkpoints, not diffusers folder format.
+            from huggingface_hub import hf_hub_download, list_repo_files
+
+            repo_files = list_repo_files(base_model)
+            ckpt_files = [f for f in repo_files if f.endswith(".safetensors")]
+            if not ckpt_files:
+                raise FileNotFoundError(
+                    f"No .safetensors checkpoint in {base_model}. "
+                    f"Files: {repo_files[:5]}"
+                )
+            ckpt_path = hf_hub_download(base_model, ckpt_files[0])
+            unet = UNet2DConditionModel.from_single_file(
+                ckpt_path, torch_dtype=self.runtime.dtype
             ).to(self.runtime.device)
             self.pipeline.unet = unet
         self.pipeline = self.pipeline.to(self.runtime.device)
