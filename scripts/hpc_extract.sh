@@ -26,7 +26,7 @@
 module purge
 module load miniforge
 module load cuda
-conda activate data_gen
+conda activate data_gen2
 
 # ==========================================
 # 2. Path Variables & Caching
