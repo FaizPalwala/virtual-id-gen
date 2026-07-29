@@ -3,7 +3,7 @@
 # hpc_extract.sh — Phase 3: Extract ArcFace Embeddings & Demographics
 # ==========================================
 #SBATCH --job-name=msc_extract
-#SBATCH --time=02:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
