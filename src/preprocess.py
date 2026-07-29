@@ -24,16 +24,6 @@ from common import laplacian_variance
 from extract_embeddings import load_arcface_model
 
 
-def _cuda_available() -> bool:
-    """Return True if PyTorch can access a CUDA GPU."""
-    try:
-        import torch
-
-        return torch.cuda.is_available()
-    except ImportError:
-        return False
-
-
 def _make_mtcnn(imgsize: int, confthreshold: float):
     """Build MTCNN for CPU fallback."""
     import torch
@@ -79,14 +69,10 @@ def preprocess_identity_candidates(
     output_root.mkdir(parents=True, exist_ok=True)
     rejected_root.mkdir(parents=True, exist_ok=True)
 
-    insface = _cuda_available()
-    if insface:
-        app = load_arcface_model(ctxid)
-        app.det_model.thresh = 0.3
-        _conf = confthreshold  # 0.3 default for InsightFace
-    else:
-        mtcnn = _make_mtcnn(imgsize, confthreshold)
-        _conf = confthreshold if confthreshold > 0.5 else 0.85  # MTCNN floor
+    app = load_arcface_model(ctxid)
+    app.det_model.thresh = 0.3
+    mtcnn = _make_mtcnn(imgsize, confthreshold)
+    _conf = confthreshold  # 0.3 default for InsightFace
 
     accepted = []
     rejected = []
@@ -112,28 +98,29 @@ def preprocess_identity_candidates(
             img_bgr = cv2.imread(str(source))
             if img_bgr is None:
                 reason = "image_unreadable"
-            elif insface:
+            else:
                 faces = app.get(img_bgr)
                 if not faces:
-                    reason = "no_face_after_generation"
+                    # InsightFace missed — try MTCNN fallback
+                    insface_ok = False
+                    image_pil = Image.open(source).convert("RGB")
+                    face_tensor, probs = mtcnn(image_pil, return_prob=True)
+                    if face_tensor is None or probs is None:
+                        reason = "no_face_after_generation"
+                    else:
+                        confidence = float(
+                            probs if np.isscalar(probs) else probs[0]
+                        )
+                        if confidence < confthreshold:
+                            reason = "low_detection_confidence"
                 else:
+                    insface_ok = True
                     face = max(faces, key=lambda f: f.det_score)
                     confidence = float(face.det_score)
                     if confidence < _conf:
                         reason = "low_detection_confidence"
-            else:
-                image_pil = Image.open(source).convert("RGB")
-                face_tensor, probs = mtcnn(image_pil, return_prob=True)
-                if face_tensor is None or probs is None:
-                    reason = "no_face_after_generation"
-                else:
-                    confidence = float(
-                        probs if np.isscalar(probs) else probs[0]
-                    )
-                    if confidence < _conf:
-                        reason = "low_detection_confidence"
             if reason is None:
-                if insface:
+                if insface_ok:
                     crop_bgr = face_align.norm_crop(
                         img_bgr, face.kps, image_size=imgsize
                     )

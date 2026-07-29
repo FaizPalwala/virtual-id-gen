@@ -20,16 +20,6 @@ from tqdm import tqdm
 from common import get_image_paths
 
 
-def _cuda_available() -> bool:
-    """Return True if PyTorch can access a CUDA GPU."""
-    try:
-        import torch
-
-        return torch.cuda.is_available()
-    except ImportError:
-        return False
-
-
 def load_arcface_model(ctx_id: int = 0):
     """Create InsightFace detection, recognition, and age/gender models."""
     try:
@@ -133,15 +123,13 @@ def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
     if not image_paths:
         raise FileNotFoundError(f"No final images found under {input_path}")
     app = load_arcface_model(ctxid)
-    use_gpu = _cuda_available()
     embeddings, paths, ages, genders, groups = [], [], [], [], []
     for image_path in tqdm(image_paths, desc="Extracting ArcFace features"):
         image = cv2.imread(str(image_path))
         if image is None:
             continue
-        if use_gpu:
-            embedding, age, gender = get_embedding_and_attributes(app, image)
-        else:
+        embedding, age, gender = get_embedding_and_attributes(app, image)
+        if embedding is None:
             embedding, age, gender = get_embedding_cpu(app, image)
         if embedding is None:
             continue
