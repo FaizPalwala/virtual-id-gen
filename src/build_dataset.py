@@ -172,8 +172,8 @@ def build_dataset(
             "forgetstep": "forget_step",
         }
     )[OUTPUT_COLUMNS]
-    csv_path = output / "sfhq_dataset.csv"
-    parquet_path = output / "sfhq_dataset.parquet"
+    csv_path = output / "dataset.csv"
+    parquet_path = output / "dataset.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
     (output / "datasetsummary.json").write_text(
