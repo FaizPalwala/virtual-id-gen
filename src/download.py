@@ -77,7 +77,7 @@ def download_sfhq(
     print(f"[INFO] Downloading and unzipping the ENTIRE database to {dataset_dir} ...")
     print(f"[INFO] (This may take a while depending on your network connection)")
     # Using the Kaggle API to bulk download and extract
-    api.dataset_download_files(dataset_name, path=str(dataset_dir), unzip=True)
+    api.dataset_download_files(dataset_name, path=str(dataset_dir), unzip=True, quiet=False)
 
     # ── 2. Locate Images ──
     images_dir = dataset_dir / "images" / "images"
