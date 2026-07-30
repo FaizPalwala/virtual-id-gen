@@ -19,7 +19,7 @@ deletion schedules.
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
 | **Output resolution** | 128×128 RGB (aligned face crops) |
 | **Identities** | 600 |
-| **Images per identity** | 75 (balanced) / 75:50:25 gradient (imbalanced) |
+| **Images per identity** | 75 (balanced, trimmed at build) / 85:40:20 gradient (imbalanced) |
 | **Total images** | 45,000 (balanced) / 22,500 (imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
@@ -48,9 +48,9 @@ InstantID solves both problems:
   steps (4 identities per step at constant distribution; configurable),
   modelling real-world incremental deletion requests (GDPR / CCPA).
 - **Imbalanced variant.**  A companion ``dataset_imbalanced.csv`` uses the
-  same identities but prunes images to a 75:50:25 gradient across three
-  popularity bins, letting evaluators measure unlearning difficulty as a
-  function of per-identity representation.
+  same identities but prunes images to an 85:40:20 gradient (4.25:2:1 ratio),
+  letting evaluators measure unlearning difficulty as a function of
+  per-identity representation, mirroring real-world long-tail distributions.
 
 ## Pipeline
 
@@ -73,9 +73,14 @@ flowchart TD
 | 1. Download | `step1_download` | 1 CPU | ~5 min | Precomputed CLIP features + KMeans seed selection from SFHQ |
 | 2. Generate | `hpc_generate.sh` | 12× L40S GPU (exclusive) | ~12 hr | 600 identities (50/shard), 85 candidates each, 100 unique prompts |
 | 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap cluster IDs |
-| 4. Preprocess | `hpc_preprocess.sh` | 1× GPU (exclusive) | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter |
-| 5. Extract | `hpc_extract.sh` | 1× GPU (exclusive) | ~2 hr | ArcFace embeddings, proxy age-group labels |
-| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | Balanced + imbalanced dataset CSV/Parquet with identity-level splits |
+| 4. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter — saves all quality-passing crops |
+| 5. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings, proxy age-group labels |
+| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | Trims to imagesperidentity (balanced) + imbalanced gradient dataset |
+
+Preprocess saves every crop that passes quality gates (up to ~85 per identity).
+The build step owns all cardinality decisions — trimming to 75 for the balanced
+dataset and applying the 85:40:20 gradient for the imbalanced variant.  This
+separation lets you modify the gradient without re-running quality checks.
 
 ### Configuration
 
@@ -189,25 +194,25 @@ valid.
 ### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
-identity pool and split assignment but prunes images to a **75:50:25 gradient**
-across three popularity bins:
+identity pool and split assignment but prunes images to an **85:40:20
+gradient** (4.25:2:1 ratio) across three popularity bins:
 
 | Bin | Identities | Images/ID | Total images |
 |---|---|---|---|
-| High (top 10%) | 60 | 75 | 4,500 |
-| Medium (30%) | 180 | 50 | 9,000 |
-| Low (bottom 60%) | 360 | 25 | 9,000 |
+| High (top 10%) | 60 | up to 85 | ~5,100 |
+| Medium (30%) | 180 | 40 | 7,200 |
+| Low (bottom 60%) | 360 | 20 | 7,200 |
 
 | Column | Type | Description |
 |---|---|---|
 | ... | ... | All columns from the balanced schema |
 | `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
-| `images_per_identity` | int | Actual per-identity image count (25, 50, or 75) |
+| `images_per_identity` | int | Actual per-identity image count (up to 85, 40, or 20) |
 
-Designed for stress-testing: high-popularity identities are over-learned
-(harder to forget), low-popularity identities are under-learned (easier to
-scrub).  Evaluators can plot unlearning efficacy against *images_per_identity*
-to test for a monotonic relationship.
+Designed for stress-testing the long tail: high-popularity identities
+(celebrities) are over-learned and hardest to forget; low-popularity identities
+are under-learned and easiest to scrub.  The 4.25× ratio between high and low
+bins mirrors real-world face dataset distributions.
 
 ## What is released / what is not
 
