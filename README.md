@@ -20,10 +20,11 @@ deletion schedules.
 | **Output resolution** | 128×128 RGB (aligned face crops) |
 | **Identities** | 600 |
 | **Images per identity** | 75 |
-| **Total images** | 45,000 |
+| **Total images** | 45,000 (balanced) / 22,500 (imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
-| **Labels** | `clusterid`, `age_group` (proxy, 4 bins), `split`, `forget_step`, `forget_variant` |
+| **Labels (balanced)** | `clusterid`, `age_group`, `split`, `forget_step`, `forget_variant` |
+| **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
 
@@ -46,6 +47,10 @@ InstantID solves both problems:
 - **Sequential forget protocol.**  60 identity clusters are deleted over 15
   steps (4 identities per step at constant distribution; configurable),
   modelling real-world incremental deletion requests (GDPR / CCPA).
+- **Imbalanced variant.**  A companion ``dataset_imbalanced.csv`` uses the
+  same identities but prunes images to a 75:50:25 gradient across three
+  popularity bins, letting evaluators measure unlearning difficulty as a
+  function of per-identity representation.
 
 ## Pipeline
 
@@ -58,18 +63,19 @@ flowchart TD
     E --> F[ArcFace embedding extraction<br/>proxy age-group labels]
     F --> G[Identity-level splits<br/>retain / test / forget assignment]
     G --> H[dataset.csv + parquet<br/>release artifact]
+    G --> I[dataset_imbalanced.csv<br/>75:50:25 gradient]
 ```
 
 ### Phase breakdown
 
 | Phase | Script | Resources | Time | Description |
 |---|---|---|---|---|
-| 1. Download | `step1_download` | 1 CPU | ~45 min | CLIP+KMeans diverse seed selection from SFHQ |
-| 2. Generate | `hpc_generate.sh` | 12× L40S GPU | ~12 hr | 600 identities (50/shard), 85 candidates each |
+| 1. Download | `step1_download` | 1 CPU | ~5 min | Precomputed CLIP features + KMeans seed selection from SFHQ |
+| 2. Generate | `hpc_generate.sh` | 12× L40S GPU (exclusive) | ~12 hr | 600 identities (50/shard), 85 candidates each, 100 unique prompts |
 | 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap cluster IDs |
-| 4. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter |
-| 5. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings, proxy age-group labels |
-| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | Assemble dataset CSV/Parquet with identity-level splits |
+| 4. Preprocess | `hpc_preprocess.sh` | 1× GPU (exclusive) | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter |
+| 5. Extract | `hpc_extract.sh` | 1× GPU (exclusive) | ~2 hr | ArcFace embeddings, proxy age-group labels |
+| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | Balanced + imbalanced dataset CSV/Parquet with identity-level splits |
 
 ### Configuration
 
