@@ -34,7 +34,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     root = Path(cfg.dataset.dataroot)
-    raw = root / "raw"
+    seeds = root / "seeds"
     identities = root / "identities"
     processed = root / "processed"
     embeddings = root / "embeddings"
@@ -44,14 +44,14 @@ def main(cfg: DictConfig) -> None:
 
         download_sfhq(
             cfg.dataset.part,
-            str(raw),
+            str(seeds),
             num_images=nidentities,
         )
     if cfg.steps.generate:
         from generate_identities import generate_identities
 
         generate_identities(
-            str(raw),
+            str(seeds),
             str(identities),
             nidentities,
             cfg.dataset.candidatesperidentity,
