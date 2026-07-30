@@ -259,20 +259,27 @@ def build_imbalanced_dataset(
     high_bin_pct: float = 0.10,    # top 10% of identities keep all 75 images
     low_bin_pct: float = 0.60,     # bottom 60% keep only low_bin_images
     low_bin_images: int = 25,      # prune to 25 randomly selected images
+    medium_bin_images: int = 50,   # middle 30% keep 50 images (gradient 75:50:25)
 ) -> str:
     """Build an imbalanced variant of the dataset for unlearning stress-testing.
 
     Follows the same merge/split logic as :func:`build_dataset`, then
-    applies a popularity-based down-sampling:
+    applies a popularity-based down-sampling to create a **3:2:1 gradient**
+    across three bins:
 
     * High-popularity (top 10%): 75 images/identity — over-represented,
-      harder to forget.
-    * Medium (next 30%): 75 images/identity — baseline (unchanged).
-    * Low-popularity (bottom 60%): 25 images/identity — under-represented,
-      easier to forget.
+      hardest to forget.
+    * Medium (next 30%): **{medium_bin_images}** images/identity — moderately
+      represented.
+    * Low-popularity (bottom 60%): {low_bin_images} images/identity — under-represented,
+      easiest to forget.
+
+    The 75 → 50 → 25 gradient is designed so downstream evaluation can plot
+    unlearning efficacy against *images_per_identity* and test for a monotonic
+    relationship.  Down-sampling (not up-sampling) avoids regeneration.
 
     Output columns include ``popularity_bin`` and ``images_per_identity``
-    so downstream evaluations can measure unlearning efficacy across bins.
+    for per-bin analysis.
     """
     # ── 1. Read and merge manifests (same as build_dataset) ──
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
@@ -323,30 +330,39 @@ def build_imbalanced_dataset(
         else:
             bin_map[cid] = "medium"
 
-    # ── 3. Down-sample low-bin identities ──
-    # Design choice: low-bin identities retain a random subset of *low_bin_images*
-    # from their 75 available images.  The seed ensures reproducibility.  We do
-    # NOT prune high or medium ids — they keep all 75 images.
-    low_rng = np.random.RandomState(randomstate + 9998)
-    low_drop: dict[int, set[int]] = {}
-    for cid in low_ids:
+    # ── 3. Down-sample low- and medium-bin identities ──
+    # Design choice: low-bin identities retain low_bin_images (25), medium-bin
+    # identities retain medium_bin_images (50), producing a clean 75:50:25
+    # gradient.  High-bin identities keep all 75.  Per-identity random draws
+    # are seeded for reproducibility.
+    rng_prune = np.random.RandomState(randomstate + 9998)
+    per_bin_images = {
+        "low": low_bin_images,
+        "medium": medium_bin_images,
+        "high": 75,  # keep all; no pruning
+    }
+    drop_mask = pd.Series(False, index=final.index)
+    for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):  # low + medium
+        target = per_bin_images[bin_map[cid]]
         rows = final[final.clusterid == cid]
-        n_keep = min(low_bin_images, len(rows))
-        keep_idx = set(low_rng.choice(rows.index, n_keep, replace=False))
-        low_drop[cid] = set(rows.index) - keep_idx
+        n_keep = min(target, len(rows))
+        keep_idx = set(rng_prune.choice(rows.index, n_keep, replace=False))
+        drop_idx = set(rows.index) - keep_idx
+        drop_mask.loc[list(drop_idx)] = True
 
-    drop_mask = final.index.isin(
-        {idx for ids in low_drop.values() for idx in ids}
-    )
-    # Work on a copy to avoid mutating *final* for later code.
     imbalanced = final[~drop_mask].copy()
 
     # ── 4. Validate post-pruning structure ──
     new_sizes = imbalanced.groupby("clusterid").size()
-    for cid in low_ids:
-        assert new_sizes.get(cid, 0) == low_bin_images, (
-            f"Identity {cid}: expected {low_bin_images}, got {new_sizes.get(cid, 0)}"
-        )
+    for cid, expected in [(cid, low_bin_images) for cid in low_ids] + [
+        (cid, medium_bin_images) for cid in set(bin_map.keys()) - high_ids - low_ids
+    ]:
+        actual = new_sizes.get(cid, 0)
+        if actual != expected:
+            raise RuntimeError(
+                f"Identity {cid} ({bin_map[cid]}): "
+                f"expected {expected} images, got {actual}"
+            )
 
     # ── 5. Assign splits on the imbalanced set ──
     # Design choice: split assignment uses the same identity pool as balanced,
@@ -430,10 +446,15 @@ def build_imbalanced_dataset(
                 "total_images": len(imbalanced),
                 "nclusters": len(imbalanced_ids),
                 "design": (
-                    "Down-sampled low-popularity identities to "
-                    f"{low_bin_images} images each.  "
-                    f"High/medium bins keep all 75 images."
+                    "Down-sampled to a 3:2:1 gradient: high 75 images, "
+                    f"medium {medium_bin_images} images, "
+                    f"low {low_bin_images} images."
                 ),
+                "images_per_bin": {
+                    "high": 75,
+                    "medium": medium_bin_images,
+                    "low": low_bin_images,
+                },
                 "bin_sizes": {
                     "high_pct": high_bin_pct,
                     "medium_pct": 1.0 - high_bin_pct - low_bin_pct,
@@ -461,5 +482,7 @@ def build_imbalanced_dataset(
     )
 
     print(f"[OK] Imbalanced dataset: {len(imbalanced)} images across "
-          f"{len(imbalanced_ids)} identities — {n_high} high, {n_medium} medium, {n_low} low.")
+          f"{len(imbalanced_ids)} identities — "
+          f"{n_high} high (75 img), {n_medium} medium ({medium_bin_images} img), "
+          f"{n_low} low ({low_bin_images} img).")
     return str(csv_path)
