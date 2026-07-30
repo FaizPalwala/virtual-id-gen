@@ -281,7 +281,7 @@ def generate_identities(
             if completed >= nidentities:
                 break
             seed_image = cv2.imread(str(seed_path))
-            seed_embedding, seed_age, _ = get_embedding_and_attributes_robust(
+            seed_embedding, _, _ = get_embedding_and_attributes_robust(
                 validation_app, seed_image, ctxid
             )
             if seed_embedding is None:
