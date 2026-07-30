@@ -123,7 +123,7 @@ def download_sfhq(
     elif actual_pool_size < num_images:
         print(f"\n[WARN] Only downloaded {actual_pool_size} valid images; reducing target.")
         num_images = actual_pool_size
-        
+
     pool_files = image_files[:pool_size]
     actual_pool_size = len(pool_files)
     if actual_pool_size < num_images:
@@ -132,27 +132,6 @@ def download_sfhq(
             f"reducing num_images from {num_images} to {actual_pool_size}."
         )
         num_images = actual_pool_size
-
-    # ── 2. Download pool images individually (avoids 80 GB archive) ──
-    print(f"[INFO] Downloading {actual_pool_size} images to evaluation pool ...")
-    image_paths: list[str] = []
-    for file_obj in tqdm(pool_files, desc="Downloading pool images"):
-        file_name = str(file_obj)
-        api.dataset_download_file(dataset_name, file_name, path=str(temp_dir))
-        local = temp_dir / file_name.split("/")[-1]
-
-        # Kaggle sometimes wraps single files in .zip
-        zip_candidate = Path(str(local) + ".zip")
-        if zip_candidate.exists():
-            with zipfile.ZipFile(zip_candidate) as zf:
-                zf.extractall(temp_dir)
-            zip_candidate.unlink()
-
-        if local.exists():
-            image_paths.append(str(local))
-
-    if not image_paths:
-        raise RuntimeError("No images downloaded — check Kaggle credentials.")
 
     # ── 3. CLIP embedding ──
     device = "cuda" if torch.cuda.is_available() else "cpu"
