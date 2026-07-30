@@ -96,6 +96,22 @@ def main(cfg: DictConfig) -> None:
             ),
         )
 
+        # Build imbalanced variant for unlearning stress-testing.
+        from build_dataset import build_imbalanced_dataset
+
+        LOGGER.info(
+            "Imbalanced dataset created at %s",
+            build_imbalanced_dataset(
+                str(processed),
+                str(embeddings),
+                str(dataset),
+                nforget,
+                ntest,
+                forget_steps,
+                cfg.dataset.seed,
+            ),
+        )
+
 
 if __name__ == "__main__":
     main()

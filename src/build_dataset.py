@@ -241,3 +241,225 @@ def build_dataset(
         )
     )
     return str(csv_path)
+
+
+def build_imbalanced_dataset(
+    identitydir: str,
+    embeddingsdir: str,
+    outputdir: str,
+    nforget: int = 40,
+    ntest: int = 60,
+    forget_steps: int = 15,
+    randomstate: int = 42,
+    # Imbalance distribution parameters.
+    # Design choice: we down-sample low-popularity identities rather than
+    # up-sample high-popularity ones, because no extra candidate images are
+    # available (preprocess selects exactly 75/identity).  Down-sampling
+    # creates a realistic long-tail distribution without regeneration.
+    high_bin_pct: float = 0.10,    # top 10% of identities keep all 75 images
+    low_bin_pct: float = 0.60,     # bottom 60% keep only low_bin_images
+    low_bin_images: int = 25,      # prune to 25 randomly selected images
+) -> str:
+    """Build an imbalanced variant of the dataset for unlearning stress-testing.
+
+    Follows the same merge/split logic as :func:`build_dataset`, then
+    applies a popularity-based down-sampling:
+
+    * High-popularity (top 10%): 75 images/identity — over-represented,
+      harder to forget.
+    * Medium (next 30%): 75 images/identity — baseline (unchanged).
+    * Low-popularity (bottom 60%): 25 images/identity — under-represented,
+      easier to forget.
+
+    Output columns include ``popularity_bin`` and ``images_per_identity``
+    so downstream evaluations can measure unlearning efficacy across bins.
+    """
+    # ── 1. Read and merge manifests (same as build_dataset) ──
+    manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
+    embeddings = Path(embeddingsdir)
+    attributes = pd.DataFrame(
+        {
+            "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
+            "agegroup": np.load(embeddings / "agegroups.npy"),
+            "age": np.load(embeddings / "ages.npy"),
+            "gender": np.load(embeddings / "genders.npy"),
+        }
+    )
+    final = manifest[["imagepath", "clusterid"]].merge(
+        attributes, on="imagepath", how="inner", validate="one_to_one"
+    )
+    if len(final) != len(manifest):
+        raise RuntimeError("Attribute extraction is missing final images.")
+
+    sizes = final.groupby("clusterid").size()
+    if sizes.nunique() != 1:
+        raise RuntimeError(f"Uneven identity clusters: {sizes.to_dict()}")
+
+    identities = sorted(final.clusterid.unique())
+
+    # ── 2. Assign popularity bins ──
+    # Design choice: seeded random shuffle ensures reproducibility and avoids
+    # any correlation with the identity's original cluster ID (which may be
+    # correlated with seed quality or prompt order).  Bin boundaries are
+    # based on identity count, not image count.
+    rng = np.random.RandomState(randomstate + 9999)  # different seed from balanced
+    shuffled_ids = identities.copy()
+    rng.shuffle(shuffled_ids)
+
+    n_high = max(1, int(len(shuffled_ids) * high_bin_pct))
+    n_low = max(1, int(len(shuffled_ids) * low_bin_pct))
+    n_medium = len(shuffled_ids) - n_high - n_low
+
+    high_ids = set(shuffled_ids[:n_high])
+    low_ids = set(shuffled_ids[-n_low:])
+    # medium_ids = set(shuffled_ids[n_high : n_high + n_medium])  # implicit
+
+    bin_map = {}
+    for cid in shuffled_ids:
+        if cid in high_ids:
+            bin_map[cid] = "high"
+        elif cid in low_ids:
+            bin_map[cid] = "low"
+        else:
+            bin_map[cid] = "medium"
+
+    # ── 3. Down-sample low-bin identities ──
+    # Design choice: low-bin identities retain a random subset of *low_bin_images*
+    # from their 75 available images.  The seed ensures reproducibility.  We do
+    # NOT prune high or medium ids — they keep all 75 images.
+    low_rng = np.random.RandomState(randomstate + 9998)
+    low_drop: dict[int, set[int]] = {}
+    for cid in low_ids:
+        rows = final[final.clusterid == cid]
+        n_keep = min(low_bin_images, len(rows))
+        keep_idx = set(low_rng.choice(rows.index, n_keep, replace=False))
+        low_drop[cid] = set(rows.index) - keep_idx
+
+    drop_mask = final.index.isin(
+        {idx for ids in low_drop.values() for idx in ids}
+    )
+    # Work on a copy to avoid mutating *final* for later code.
+    imbalanced = final[~drop_mask].copy()
+
+    # ── 4. Validate post-pruning structure ──
+    new_sizes = imbalanced.groupby("clusterid").size()
+    for cid in low_ids:
+        assert new_sizes.get(cid, 0) == low_bin_images, (
+            f"Identity {cid}: expected {low_bin_images}, got {new_sizes.get(cid, 0)}"
+        )
+
+    # ── 5. Assign splits on the imbalanced set ──
+    # Design choice: split assignment uses the same identity pool as balanced,
+    # only the per-ID image count differs.  This ensures the same identities
+    # are forget/test/retain in both variants, making cross-variant comparison
+    # valid.
+    imbalanced_ids = sorted(imbalanced.clusterid.unique())
+    rng_split = np.random.RandomState(randomstate)
+    rng_split.shuffle(imbalanced_ids)
+    forget_ids = imbalanced_ids[:nforget]
+    test_ids = imbalanced_ids[nforget : nforget + ntest]
+    split_map = (
+        {cid: "forget" for cid in forget_ids}
+        | {cid: "test" for cid in test_ids}
+        | {cid: "retain" for cid in imbalanced_ids[nforget + ntest :]}
+    )
+    imbalanced["split"] = imbalanced.clusterid.map(split_map)
+
+    # Forget step distribution (same algorithm as balanced).
+    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
+    imbalanced["forgetstep"] = (
+        imbalanced.clusterid.map(
+            {cid: step for cid, (step, _) in step_map.items()}
+        )
+        .fillna(-1)
+        .astype(int)
+    )
+    imbalanced["forgetvariant"] = (
+        imbalanced.clusterid.map(
+            {cid: variant for cid, (_, variant) in step_map.items()}
+        )
+        .fillna(-1)
+        .astype(int)
+    )
+    imbalanced = imbalanced[imbalanced.agegroup != -1].copy()
+
+    # ── 6. Add popularity annotation columns ──
+    # Design choice: adding both a categorical label (popularity_bin) and a
+    # cardinality value (images_per_identity) lets downstream evaluation decide
+    # which axis to test — discrete bins or continuous count.
+    imbalanced["popularity_bin"] = imbalanced.clusterid.map(bin_map)
+    id_counts = imbalanced.groupby("clusterid").size()
+    imbalanced["images_per_identity"] = imbalanced.clusterid.map(id_counts)
+
+    # ── 7. Write output ──
+    # Design choice: imbalanced variant is a separate file paired alongside
+    # dataset.csv.  Users compare forget efficacy across popularity_bin values
+    # without modifying the balanced baseline.
+    output = Path(outputdir)
+    output.mkdir(parents=True, exist_ok=True)
+    dataroot = output.parent
+
+    output_columns = OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
+    output_df = imbalanced.rename(
+        columns={
+            "imagepath": "image_path",
+            "agegroup": "age_group",
+            "forgetstep": "forget_step",
+            "forgetvariant": "forget_variant",
+        }
+    )[output_columns]
+    output_df["image_path"] = (
+        output_df["image_path"]
+        .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
+    )
+
+    csv_path = output / "dataset_imbalanced.csv"
+    parquet_path = output / "dataset_imbalanced.parquet"
+    output_df.to_csv(csv_path, index=False)
+    output_df.to_parquet(parquet_path, index=False)
+
+    # Summary with per-bin breakdown.
+    bin_stats = imbalanced.groupby("popularity_bin").agg(
+        nidentities=("clusterid", "nunique"),
+        nimages=("image_path", "count"),
+    ).to_dict("index")
+
+    (output / "datasetsummary_imbalanced.json").write_text(
+        json.dumps(
+            {
+                "total_images": len(imbalanced),
+                "nclusters": len(imbalanced_ids),
+                "design": (
+                    "Down-sampled low-popularity identities to "
+                    f"{low_bin_images} images each.  "
+                    f"High/medium bins keep all 75 images."
+                ),
+                "bin_sizes": {
+                    "high_pct": high_bin_pct,
+                    "medium_pct": 1.0 - high_bin_pct - low_bin_pct,
+                    "low_pct": low_bin_pct,
+                    "n_high": n_high,
+                    "n_medium": n_medium,
+                    "n_low": n_low,
+                },
+                "per_bin": {
+                    bin: {
+                        "identities": stats["nidentities"],
+                        "images": stats["nimages"],
+                        "images_per_id": round(stats["nimages"] / stats["nidentities"], 1),
+                    }
+                    for bin, stats in bin_stats.items()
+                },
+                "forget_steps": forget_steps,
+                "split_sizes": {
+                    key: int(value)
+                    for key, value in imbalanced.groupby("split").size().items()
+                },
+            },
+            indent=2,
+        )
+    )
+
+    print(f"[OK] Imbalanced dataset: {len(imbalanced)} images across "
+          f"{len(imbalanced_ids)} identities — {n_high} high, {n_medium} medium, {n_low} low.")
+    return str(csv_path)
