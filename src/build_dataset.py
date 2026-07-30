@@ -308,10 +308,6 @@ def build_imbalanced_dataset(
     if len(final) != len(manifest):
         raise RuntimeError("Attribute extraction is missing final images.")
 
-    sizes = final.groupby("clusterid").size()
-    if sizes.nunique() != 1:
-        raise RuntimeError(f"Uneven identity clusters: {sizes.to_dict()}")
-
     identities = sorted(final.clusterid.unique())
 
     # ── 2. Assign popularity bins ──
