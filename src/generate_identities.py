@@ -9,7 +9,7 @@ plan, prompt, and seed are written to ``raw_candidate_manifest.csv``.
 
 Example:
     python generate_identities.py \\
-        --rawdir ../data/raw \\
+        --seedsdir ../data/seeds \\
         --outputdir ../data/identities \\
         --nidentities 600 \\
         --variantsperidentity 85 \\
@@ -214,7 +214,7 @@ def build_variation_plan(count: int = 39) -> list[VariationSpec]:
 
 
 def generate_identities(
-    rawdir: str,
+    seedsdir: str,
     outputdir: str,
     nidentities: int = 400,
     candidatesperidentity: int = 39,
@@ -245,7 +245,7 @@ def generate_identities(
     _gs = float(instantid_config.get("guidance_scale", _preset.get("guidance_scale", 5.5)))
     _ips = float(instantid_config.get("ip_adapter_scale", _preset.get("ip_adapter_scale", 0.90)))
     _steps = int(instantid_config.get("num_inference_steps", _preset.get("num_inference_steps", 25)))
-    sources = get_image_paths(rawdir)
+    sources = get_image_paths(seedsdir)
     if len(sources) < nidentities:
         raise ValueError(
             f"Need at least {nidentities} source images; found {len(sources)}."
@@ -415,7 +415,7 @@ def generate_identities(
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser for standalone generation-stage execution."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rawdir", required=True)
+    parser.add_argument("--seedsdir", required=True)
     parser.add_argument("--outputdir", required=True)
     parser.add_argument("--nidentities", type=int, default=400)
     parser.add_argument(
@@ -434,7 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
 if __name__ == "__main__":
     args = build_parser().parse_args()
     generate_identities(
-        args.rawdir,
+        args.seedsdir,
         args.outputdir,
         args.nidentities,
         args.candidatesperidentity,
