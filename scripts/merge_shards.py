@@ -26,8 +26,6 @@ from pathlib import Path
 
 import pandas as pd
 
-IDENTITIES_PER_SHARD = 100
-
 
 def merge_shards(
     outputdir: str,
