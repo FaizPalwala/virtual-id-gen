@@ -27,6 +27,12 @@ def main(cfg: DictConfig) -> None:
             f"forget ({nforget}) + test ({ntest}) >= nidentities ({nidentities})"
         )
 
+    # Minimum size guards for download and build (generate handles sharding).
+    if nidentities < 100 and (cfg.steps.download or cfg.steps.build):
+        raise ValueError(f"nidentities must be ≥ 100 (got {nidentities})")
+    if forget_steps < 5 and cfg.steps.build:
+        raise ValueError(f"forget_steps must be ≥ 5 (got {forget_steps})")
+
     root = Path(cfg.dataset.dataroot)
     seeds = root / "seeds"
     identities = root / "identities"
@@ -75,12 +81,6 @@ def main(cfg: DictConfig) -> None:
             str(processed / "images"), str(embeddings), cfg.pipeline.ctxid
         )
     if cfg.steps.build:
-        # Minimum dataset size guards (only enforced during build).
-        if nidentities < 100:
-            raise ValueError(f"nidentities must be ≥ 100 (got {nidentities})")
-        if forget_steps < 5:
-            raise ValueError(f"forget_steps must be ≥ 5 (got {forget_steps})")
-
         from build_dataset import build_dataset
 
         LOGGER.info(
