@@ -5,8 +5,8 @@
 #SBATCH --job-name=msc_generate
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1                       # 1 GPU per array task (4 in parallel)
-#SBATCH --array=0-3                        # 4 shards: identities are split evenly
+#SBATCH --gres=gpu:1                       # 1 GPU per array task (6 in parallel)
+#SBATCH --array=0-5                        # 6 shards: identities are split evenly
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --output=logs/%x_shard%a_%j.out
@@ -19,6 +19,8 @@
 # Shard 1 (seed=44): identities 100–199
 # Shard 2 (seed=46): identities 200–299
 # Shard 3 (seed=48): identities 300–399
+# Shard 4 (seed=50): identities 400–499
+# Shard 5 (seed=52): identities 500–599
 #
 # Output lands under $DATA_DIR/shard_${TASK_ID}/ for later merging.
 # ------------------------------------------------------------------
