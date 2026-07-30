@@ -93,6 +93,7 @@ def main(cfg: DictConfig) -> None:
                 ntest,
                 forget_steps,
                 cfg.dataset.seed,
+                cfg.dataset.imagesperidentity,
             ),
         )
 

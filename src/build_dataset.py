@@ -57,8 +57,9 @@ def build_dataset(
     ntest: int = 60,
     forget_steps: int = 15,
     randomstate: int = 42,
+    imagesperidentity: int = 75,
 ) -> str:
-    """Merge final manifest and attributes without changing CSV output schema."""
+    """Merge final manifest and attributes, trim to imagesperidentity per cluster."""
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     embeddings = Path(embeddingsdir)
     attributes = pd.DataFrame(
@@ -69,7 +70,7 @@ def build_dataset(
             "gender": np.load(embeddings / "genders.npy"),
         }
     )
-    final = manifest[["imagepath", "clusterid"]].merge(
+    final = manifest[["imagepath", "clusterid", "detection_confidence"]].merge(
         attributes, on="imagepath", how="inner", validate="one_to_one"
     )
     if len(final) != len(manifest):
@@ -83,9 +84,17 @@ def build_dataset(
         if only_attrs:
             print(f"  In attributes only ({len(only_attrs)}): {sorted(only_attrs)[:3]}")
         raise RuntimeError("Attribute extraction is missing final images.")
-    sizes = final.groupby("clusterid").size()
-    if sizes.nunique() != 1:
-        raise RuntimeError(f"Uneven identity clusters: {sizes.to_dict()}")
+
+    # Trim each identity to imagesperidentity (preprocess may have saved
+    # more than that).  The manifest is quality-ranked, so the first N
+    # rows per cluster are the best crops.
+    final = (
+        final.sort_values(["clusterid", "detection_confidence"], ascending=[True, False])
+        .groupby("clusterid")
+        .head(imagesperidentity)
+        .reset_index(drop=True)
+    )
+
     identities = sorted(final.clusterid.unique())
     if nforget + ntest >= len(identities):
         raise ValueError("Split sizes must leave at least one retain identity.")
@@ -292,7 +301,7 @@ def build_imbalanced_dataset(
             "gender": np.load(embeddings / "genders.npy"),
         }
     )
-    final = manifest[["imagepath", "clusterid"]].merge(
+    final = manifest[["imagepath", "clusterid", "detection_confidence"]].merge(
         attributes, on="imagepath", how="inner", validate="one_to_one"
     )
     if len(final) != len(manifest):
