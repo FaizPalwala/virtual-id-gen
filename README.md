@@ -19,7 +19,7 @@ deletion schedules.
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
 | **Output resolution** | 128×128 RGB (aligned face crops) |
 | **Identities** | 600 |
-| **Images per identity** | 75 |
+| **Images per identity** | 75 (balanced) / 75:50:25 gradient (imbalanced) |
 | **Total images** | 45,000 (balanced) / 22,500 (imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
