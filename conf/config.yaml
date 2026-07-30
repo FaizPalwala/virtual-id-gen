@@ -19,7 +19,6 @@ dataset:
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false
-  # precomputed CLIP embeddings pool size: total images in SFHQ Part 1
 pipeline:
   ctxid: 0
   imgsize: 128
