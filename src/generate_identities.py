@@ -108,9 +108,9 @@ class VariationSpec:
 def build_variation_plan(count: int = 39) -> list[VariationSpec]:
     """Return deterministic, diverse non-identity prompts.
 
-    The first 39 entries form a balanced 13 x 3 design: 13 pose/expression/
-    setting compositions crossed with three lighting treatments.  Counts above
-    39 repeat the composition plan with an additional deterministic lighting
+    The first 100 entries form a balanced 20 x 5 design: 20 pose/expression/
+    setting/composition tuples crossed with 5 lighting treatments.  Counts above
+    100 repeat the composition plan with an additional deterministic lighting
     cycle; this supports candidate oversampling without a fixed portrait prompt.
     """
     if count <= 0:
@@ -194,11 +194,55 @@ def build_variation_plan(count: int = 39) -> list[VariationSpec]:
             "softly blurred editorial interior",
             "85mm portrait lens",
         ),
+        (
+            "profile view facing left",
+            "neutral relaxed expression",
+            "clean grey backdrop",
+            "85mm portrait lens",
+        ),
+        (
+            "profile view facing right",
+            "gentle closed-mouth smile",
+            "clean grey backdrop",
+            "85mm portrait lens",
+        ),
+        (
+            "head tilted slightly up",
+            "curious expression",
+            "softly blurred foliage background",
+            "85mm portrait lens",
+        ),
+        (
+            "looking over shoulder",
+            "warm genuine smile",
+            "muted urban brick wall background",
+            "85mm portrait lens",
+        ),
+        (
+            "extreme close-up portrait",
+            "intense focused expression",
+            "dark minimal backdrop",
+            "85mm portrait lens",
+        ),
+        (
+            "candid mid-shot portrait",
+            "soft natural laugh",
+            "outdoor cafe background",
+            "50mm environmental lens",
+        ),
+        (
+            "two-thirds standing portrait",
+            "confident slight smirk",
+            "architectural column backdrop",
+            "35mm wide lens",
+        ),
     ]
     lighting = [
         "soft natural window light",
         "soft professional studio key light with gentle fill",
         "open-shade daylight with balanced exposure",
+        "warm golden hour sunlight from the side",
+        "cool overcast window light",
     ]
     return [
         VariationSpec(
