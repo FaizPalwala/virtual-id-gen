@@ -11,7 +11,7 @@ it gracefully falls back to local PyTorch inference.
 Requires: kaggle CLI credentials, torch, transformers, scikit-learn.
 
 Example:
-    python download.py --num_images 400 --output_dir ../data/raw
+    python download.py --num_images 400 --output_dir ../data/seeds
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def suppress_stdout():
 
 def download_sfhq(
     part: int = 1,
-    output_dir: str = "../data/raw",
+    output_dir: str = "../data/seeds",
     num_images: int = 400,
 ) -> str:
     """Download *num_images* diverse seed images from SFHQ Part *part*.
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Download SFHQ and extract diverse seeds.")
     parser.add_argument("--num_images", type=int, default=400, help="Number of diverse seeds to extract")
-    parser.add_argument("--output_dir", type=str, default="../data/raw", help="Output directory")
+    parser.add_argument("--output_dir", type=str, default="../data/seeds", help="Output directory")
     args = parser.parse_args()
     
     download_sfhq(num_images=args.num_images, output_dir=args.output_dir)
