@@ -61,61 +61,84 @@ def download_sfhq(
     api = KaggleApi()
     api.authenticate()
 
-    # ── 2. Direct Streaming (Bypassing API Truncation) ──
-    # The Kaggle API dataset_list_files notoriously truncates large datasets to the first 20 items. 
-    # Because "a small sample" comes first alphabetically, it hides the main "images/images" directory.
-    # We bypass this entirely by constructing the mathematically predictable filenames and requesting them directly.
-    print(f"[INFO] Bypassing Kaggle API truncation. Streaming {pool_size} images directly...")
+    import concurrent.futures
+    import threading
+
+    # ── 2. Direct Streaming (Bypassing API Truncation via Multithreading) ──
+    print(f"[INFO] Bypassing Kaggle API truncation. Streaming {pool_size} images concurrently...")
     
     image_paths: list[str] = []
-    index = 0
-    consecutive_fails = 0
     
-    with tqdm(total=pool_size, desc="Downloading pool images") as pbar:
-        # Stop if we hit our pool target or if we hit 500 dead links in a row
-        while len(image_paths) < pool_size and consecutive_fails < 500:
-            # The author used 8-digit padding (e.g., 00000008)
-            filename = f"SFHQ_pt1_{index:08d}.jpg"
-            
-            # The exact internal Kaggle path varies slightly, we test the valid targets
-            candidates = [
-                f"images/images/{filename}",
-                f"images/{filename}",
-                filename
-            ]
-            
-            success = False
-            for target_path in candidates:
-                try:
-                    # Attempt direct download
-                    api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
-                    
-                    # Kaggle may wrap single files in .zip; find and extract any that appeared
-                    for z in temp_dir.rglob("*.zip"):
-                        with zipfile.ZipFile(z) as zf:
-                            zf.extractall(temp_dir)
-                        z.unlink()
-                        
-                    # Find the exact downloaded file anywhere inside temp_dir
-                    # (rglob guards against Kaggle unexpectedly nesting folders during extraction)
-                    downloaded = list(temp_dir.rglob(filename))
-                    
-                    if downloaded:
-                        image_paths.append(str(downloaded[0]))
-                        success = True
-                        break
-                        
-                except Exception:
-                    # File missing on this specific candidate path, try the next one
-                    continue
-                    
-            if success:
-                consecutive_fails = 0
-                pbar.update(1)
-            else:
-                consecutive_fails += 1
+    # Thread-safe lock for appending to our results list
+    lock = threading.Lock()
+    
+    # We will generate a broad index range. We generate 2x the pool size to account 
+    # for missing indices (404 errors) in the dataset sequence.
+    index_range = range(0, pool_size * 2)
+    
+    # Helper function to run inside each thread
+    def download_single_image(idx: int) -> bool:
+        # If we've already hit our target pool size, abort early
+        with lock:
+            if len(image_paths) >= pool_size:
+                return False
                 
-            index += 1
+        filename = f"SFHQ_pt1_{idx:08d}.jpg"
+        
+        # Test valid Kaggle target paths
+        candidates = [
+            f"images/images/{filename}",
+            f"images/{filename}",
+            filename
+        ]
+        
+        for target_path in candidates:
+            try:
+                # Kaggle API is thread-safe for reading/downloading
+                api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
+                
+                # Check for and extract zip wrappers concurrently
+                zip_candidate = temp_dir / f"{filename}.zip"
+                if zip_candidate.exists():
+                    with zipfile.ZipFile(zip_candidate) as zf:
+                        zf.extractall(temp_dir)
+                    zip_candidate.unlink()
+                    
+                # Use glob to find the extracted file, as Kaggle might nest it
+                downloaded = list(temp_dir.rglob(filename))
+                
+                if downloaded:
+                    with lock:
+                        # Double-check pool size inside lock before appending
+                        if len(image_paths) < pool_size:
+                            image_paths.append(str(downloaded[0]))
+                            return True
+            except Exception:
+                continue
+                
+        return False
+
+    # Execute downloads concurrently using 20 threads
+    max_threads = 20
+    print(f"[INFO] Launching {max_threads} download threads...")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_threads=max_threads) as executor:
+        # Submit tasks and wrap in tqdm for a progress bar
+        futures = {executor.submit(download_single_image, i): i for i in index_range}
+        
+        with tqdm(total=pool_size, desc="Downloading pool images") as pbar:
+            for future in concurrent.futures.as_completed(futures):
+                success = future.result()
+                if success:
+                    pbar.update(1)
+                    
+                # Abort remaining futures if we hit our target size
+                with lock:
+                    if len(image_paths) >= pool_size:
+                        # Cancel pending futures in the queue (Python 3.9+)
+                        for f in futures:
+                            f.cancel()
+                        break
 
     actual_pool_size = len(image_paths)
     if not image_paths:
