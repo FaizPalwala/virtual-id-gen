@@ -16,13 +16,9 @@
 # loading SDXL + ControlNet + Juggernaut + InstantID in sequence.
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Pin the task to its assigned GPU.  Slurm should set CUDA_VISIBLE_DEVICES
-# automatically from --gres=gpu:1, but not all clusters do.  This ensures
-# each array task sees exactly one GPU.
-if [ -n "$SLURM_JOB_GPUS" ]; then
-    export CUDA_VISIBLE_DEVICES="$SLURM_JOB_GPUS"
-fi
-echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,name,memory.free --format=csv,noheader 2>/dev/null | head -1 || echo 'unknown')"
+# Log assigned GPU for diagnostics (do NOT set CUDA_VISIBLE_DEVICES — Slurm
+# manages GPU isolation on this cluster; overriding can break discovery).
+echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader 2>/dev/null | head -1 || echo 'unknown')"
 
 # ------------------------------------------------------------------
 # Each array task generates 50 identities with a unique random seed.
