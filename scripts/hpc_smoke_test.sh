@@ -16,7 +16,6 @@
 #SBATCH --job-name=msc_smoke
 #SBATCH --time=0-01:00:00
 #SBATCH --partition=gpu
-#SBATCH --exclusive
 #SBATCH --gres=gpu:1
 #SBATCH --output=logs/smoke_%j.out
 #SBATCH --error=logs/smoke_%j.err
