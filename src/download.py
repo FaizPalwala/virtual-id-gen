@@ -15,9 +15,13 @@ Example:
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import zipfile
+import threading
+import concurrent.futures
 from pathlib import Path
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -27,11 +31,23 @@ from sklearn.metrics import pairwise_distances_argmin_min
 from tqdm import tqdm
 
 
+@contextmanager
+def suppress_stdout():
+    """Context manager to completely silence noisy API prints."""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+
+
 def download_sfhq(
     part: int = 1,
     output_dir: str = "../data/raw",
     num_images: int = 400,
-    pool_size: int = 4000,
+    pool_size: int = 12000,
 ) -> str:
     """Download *num_images* diverse seed images from SFHQ Part *part*.
 
@@ -58,11 +74,9 @@ def download_sfhq(
 
     # ── 1. Authenticate ──
     print(f"[INFO] Authenticating Kaggle API for {dataset_name} ...")
-    api = KaggleApi()
-    api.authenticate()
-
-    import concurrent.futures
-    import threading
+    with suppress_stdout():
+        api = KaggleApi()
+        api.authenticate()
 
     # ── 2. Direct Streaming (Bypassing API Truncation via Multithreading) ──
     print(f"[INFO] Bypassing Kaggle API truncation. Streaming {pool_size} images concurrently...")
@@ -94,8 +108,9 @@ def download_sfhq(
         
         for target_path in candidates:
             try:
-                # Kaggle API is thread-safe for reading/downloading
-                api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
+                # Silencing the Kaggle API's hardcoded print statements
+                with suppress_stdout():
+                    api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
                 
                 # Check for and extract zip wrappers concurrently
                 zip_candidate = temp_dir / f"{filename}.zip"
@@ -147,19 +162,10 @@ def download_sfhq(
         print(f"\n[WARN] Only downloaded {actual_pool_size} valid images; reducing target.")
         num_images = actual_pool_size
 
-    pool_files = image_files[:pool_size]
-    actual_pool_size = len(pool_files)
-    if actual_pool_size < num_images:
-        print(
-            f"[WARN] Only {actual_pool_size} images available; "
-            f"reducing num_images from {num_images} to {actual_pool_size}."
-        )
-        num_images = actual_pool_size
-
     # ── 3. CLIP embedding ──
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_id = "openai/clip-vit-base-patch32"
-    print(f"[INFO] Loading CLIP model ({model_id}) on {device} ...")
+    print(f"\n[INFO] Loading CLIP model ({model_id}) on {device} ...")
     model = CLIPModel.from_pretrained(model_id).to(device)
     processor = CLIPProcessor.from_pretrained(model_id)
 
@@ -185,7 +191,7 @@ def download_sfhq(
     embeddings_arr = np.array(embeddings)
 
     # ── 4. KMeans clustering → most-representative per cluster ──
-    print(f"[INFO] Clustering {len(embeddings_arr)} vectors into {num_images} groups ...")
+    print(f"\n[INFO] Clustering {len(embeddings_arr)} vectors into {num_images} groups ...")
     kmeans = KMeans(n_clusters=num_images, random_state=42, n_init="auto")
     kmeans.fit(embeddings_arr)
     closest, _ = pairwise_distances_argmin_min(
@@ -193,14 +199,14 @@ def download_sfhq(
     )
 
     # ── 5. Save seeds ──
-    print(f"[INFO] Saving {num_images} diverse seeds to {output_path} ...")
+    print(f"\n[INFO] Saving {num_images} diverse seeds to {output_path} ...")
     for idx in tqdm(closest, desc="Saving seeds"):
         src = valid_paths[idx]
         dest = output_path / f"seed_{idx:04d}.jpg"
         shutil.copy2(src, dest)
 
     # ── 6. Cleanup ──
-    print("[INFO] Cleaning up temporary pool ...")
+    print("\n[INFO] Cleaning up temporary pool ...")
     shutil.rmtree(temp_dir, ignore_errors=True)
 
     print(f"[OK] {num_images} diverse seeds saved to {output_path.resolve()}")
