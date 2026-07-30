@@ -5,10 +5,9 @@
 #SBATCH --job-name=msc_generate
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1                       # 1 GPU per array task (12 in parallel)
-#SBATCH --array=0-11                       # 12 shards: identities are split evenly
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --exclusive                       # Whole node per shard — no GPU sharing
+#SBATCH --gres=gpu:1                      # Request 1 GPU (node has 4; 3 idle)
+#SBATCH --array=0-11
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
