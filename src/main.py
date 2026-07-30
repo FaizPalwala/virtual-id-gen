@@ -46,6 +46,7 @@ def main(cfg: DictConfig) -> None:
             cfg.dataset.part,
             str(seeds),
             num_images=nidentities,
+            skip_download=cfg.dataset.get("skip_download", False),
         )
     if cfg.steps.generate:
         from generate_identities import generate_identities
