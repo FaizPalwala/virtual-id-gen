@@ -122,7 +122,7 @@ def download_sfhq(
     max_threads = 20
     print(f"[INFO] Launching {max_threads} download threads...")
     
-    with concurrent.futures.ThreadPoolExecutor(max_threads=max_threads) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
         # Submit tasks and wrap in tqdm for a progress bar
         futures = {executor.submit(download_single_image, i): i for i in index_range}
         
