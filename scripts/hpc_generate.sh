@@ -1,27 +1,34 @@
 #!/bin/bash
 # ==========================================
-# hpc_generate.sh — Phase 1: Identity Generation (4-way GPU array)
+# hpc_generate.sh — Phase 2: Identity Generation (12-way GPU array)
 # ==========================================
 #SBATCH --job-name=msc_generate
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1                       # 1 GPU per array task (6 in parallel)
-#SBATCH --array=0-5                        # 6 shards: identities are split evenly
+#SBATCH --gres=gpu:1                       # 1 GPU per array task (12 in parallel)
+#SBATCH --array=0-11                       # 12 shards: identities are split evenly
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
 # ------------------------------------------------------------------
-# Each array task generates 100 identities with a unique random seed.
+# Each array task generates 50 identities with a unique random seed.
 #
-# Shard 0 (seed=42): identities   0– 99
-# Shard 1 (seed=44): identities 100–199
-# Shard 2 (seed=46): identities 200–299
-# Shard 3 (seed=48): identities 300–399
-# Shard 4 (seed=50): identities 400–499
-# Shard 5 (seed=52): identities 500–599
+# Shard  0 (seed=42): identities   0– 49
+# Shard  1 (seed=44): identities  50– 99
+# Shard  2 (seed=46): identities 100–149
+# Shard  3 (seed=48): identities 150–199
+# Shard  4 (seed=50): identities 200–249
+# Shard  5 (seed=52): identities 250–299
+# Shard  6 (seed=54): identities 300–349
+# Shard  7 (seed=56): identities 350–399
+# Shard  8 (seed=58): identities 400–449
+# Shard  9 (seed=60): identities 450–499
+# Shard 10 (seed=62): identities 500–549
+# Shard 11 (seed=64): identities 550–599
 #
+# Merge with hpc_merge.sh after all shards complete.
 # Output lands under $DATA_DIR/shard_${TASK_ID}/ for later merging.
 # ------------------------------------------------------------------
 
@@ -87,7 +94,7 @@ echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Running GPU Preflight..."
 bash "$SHARD_TMPDIR/repo/scripts/gpu_preflight.sh"
 
 # ==========================================
-# 5. Generate 100 Identities (one shard)
+# 5. Generate 50 Identities (one shard)
 # ==========================================
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Starting identity generation..."
 
@@ -95,7 +102,7 @@ SHARD_SEED=$((42 + SLURM_ARRAY_TASK_ID * 2))
 
 cd "$SHARD_TMPDIR/repo/src"
 
-# Each shard writes into its own dataroot so the four array tasks don't
+# Each shard writes into its own dataroot so the twelve array tasks don't
 # overwrite each other.  After the job finishes, merge with hpc_merge.sh.
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_DATA/raw"
@@ -109,7 +116,7 @@ fi
 
 python main.py --config-name step2_generate \
     dataset.dataroot="$SHARD_DATA" \
-    dataset.nidentities=100 \
+    dataset.nidentities=50 \
     dataset.seed="$SHARD_SEED" \
     dataset.forget_steps=0 \
     dataset.test_pct=0 \
