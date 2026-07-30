@@ -56,6 +56,22 @@ NEGATIVE_PROMPT = (
     "duplicate face, text, watermark, logo"
 )
 
+# Model-specific hyperparameter presets.  Config defaults are set for
+# Juggernaut-XL-v9 (the primary model).  Switching base_model in config.yaml
+# automatically applies the matching preset for params not explicitly overridden.
+MODEL_DEFAULTS: dict[str, dict[str, float | int]] = {
+    "stabilityai/stable-diffusion-xl-base-1.0": {
+        "guidance_scale": 5.5,
+        "ip_adapter_scale": 0.90,
+        "num_inference_steps": 25,
+    },
+    "RunDiffusion/Juggernaut-XL-v9": {
+        "guidance_scale": 3.0,
+        "ip_adapter_scale": 0.85,
+        "num_inference_steps": 30,
+    },
+}
+
 @dataclass(frozen=True)
 class VariationSpec:
     """A non-identity rendering instruction for one generated candidate."""
@@ -222,10 +238,11 @@ def generate_identities(
     base_model = instantid_config.get("base_model") or (
         "stabilityai/stable-diffusion-xl-base-1.0"
     )
-    # Resolve hyperparams: CLI override > hardcoded fallback.
-    _gs = float(instantid_config.get("guidance_scale", 5.5))
-    _ips = float(instantid_config.get("ip_adapter_scale", 0.90))
-    _steps = int(instantid_config.get("num_inference_steps", 25))
+    # Resolve hyperparams: CLI override > model preset > hardcoded fallback.
+    _preset = MODEL_DEFAULTS.get(base_model, {})
+    _gs = float(instantid_config.get("guidance_scale", _preset.get("guidance_scale", 5.5)))
+    _ips = float(instantid_config.get("ip_adapter_scale", _preset.get("ip_adapter_scale", 0.90)))
+    _steps = int(instantid_config.get("num_inference_steps", _preset.get("num_inference_steps", 25)))
     sources = get_image_paths(rawdir)
     if len(sources) < nidentities:
         raise ValueError(

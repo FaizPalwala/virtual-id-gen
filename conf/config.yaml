@@ -21,12 +21,13 @@ pipeline:
   min_similarity_raw: 0.40
   min_similarity_final: 0.45
   instantid:
-    base_model: stabilityai/stable-diffusion-xl-base-1.0
+    base_model: RunDiffusion/Juggernaut-XL-v9
     width: 1024
     height: 1024
-    num_inference_steps: 30
-    guidance_scale: 3.0
-    ip_adapter_scale: 0.85
+    # guidance_scale, ip_adapter_scale, and num_inference_steps are
+    # resolved from MODEL_DEFAULTS in generate_identities.py based on
+    # the selected base_model.  Override via CLI to bypass presets:
+    #   pipeline.instantid.guidance_scale=4.0
     controlnet_conditioning_scale: 0.80
     cache_dir: null
     require_cuda: true
