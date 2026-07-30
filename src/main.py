@@ -11,13 +11,28 @@ LOGGER = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Run selected independent pipeline stages in their required order."""
-    nforget = cfg.dataset.forget_steps * 2
-    ntest = int(cfg.dataset.nidentities * cfg.dataset.test_pct)
     nidentities = cfg.dataset.nidentities
+    forget_pct = cfg.dataset.forget_pct
+    forget_steps = cfg.dataset.forget_steps
+
+    # Minimum dataset size guards.
+    if nidentities < 100:
+        raise ValueError(f"nidentities must be ≥ 100 (got {nidentities})")
+    if forget_steps < 5:
+        raise ValueError(f"forget_steps must be ≥ 5 (got {forget_steps})")
+
+    nforget = int(nidentities * forget_pct)
+    ntest = int(nidentities * cfg.dataset.test_pct)
+
+    # Clamp: every step must have ≥ 1 identity.
+    if nforget < forget_steps:
+        forget_steps = max(5, nforget)
+
     if nforget + ntest >= nidentities:
         raise ValueError(
             f"forget ({nforget}) + test ({ntest}) >= nidentities ({nidentities})"
         )
+
     root = Path(cfg.dataset.dataroot)
     raw = root / "raw"
     identities = root / "identities"
@@ -76,6 +91,7 @@ def main(cfg: DictConfig) -> None:
                 str(dataset),
                 nforget,
                 ntest,
+                forget_steps,
                 cfg.dataset.seed,
             ),
         )
