@@ -4,8 +4,8 @@ dataset:
   dataroot: ../data
   part: 1
   nidentities: 400
-  imagesperidentity: 60
-  candidatesperidentity: 70
+  imagesperidentity: 75
+  candidatesperidentity: 85
   nforget: 40
   ntest: 60
   seed: 42
@@ -28,6 +28,7 @@ pipeline:
     controlnet_conditioning_scale: 0.80
     cache_dir: null
     require_cuda: true
+    age_stratify: false
 
 steps:
   download: false

@@ -26,6 +26,7 @@ from common import get_image_paths
 from extract_embeddings import (
     get_embedding_and_attributes_robust,
     load_arcface_model,
+    age_to_group,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -55,6 +56,25 @@ NEGATIVE_PROMPT = (
     "lowres, blurry, out of focus, distorted face, malformed face, extra face, "
     "duplicate face, text, watermark, logo"
 )
+
+# Model-specific hyperparameter presets.  Values here act as defaults that
+# can be overridden via Hydra CLI (e.g. pipeline.instantid.guidance_scale=4.0).
+# If a param is present in instantid_config it always wins over the preset.
+MODEL_DEFAULTS: dict[str, dict[str, float | int]] = {
+    "stabilityai/stable-diffusion-xl-base-1.0": {
+        "guidance_scale": 5.5,
+        "ip_adapter_scale": 0.90,
+        "num_inference_steps": 25,
+    },
+    "RunDiffusion/Juggernaut-XL-v9": {
+        "guidance_scale": 3.0,
+        "ip_adapter_scale": 0.85,
+        "num_inference_steps": 30,
+    },
+}
+
+# Age groups for stratified seed selection (InsightFace age estimates).
+AGE_GROUPS = [(0, 25), (25, 45), (45, 65), (65, 200)]
 
 
 @dataclass(frozen=True)
@@ -220,6 +240,15 @@ def generate_identities(
         raise ValueError("max_seed_attempts must be positive when provided.")
 
     instantid_config = instantid_config or {}
+    base_model = instantid_config.get("base_model") or (
+        "stabilityai/stable-diffusion-xl-base-1.0"
+    )
+    # Resolve hyperparams: CLI override > model preset > hardcoded fallback.
+    _preset = MODEL_DEFAULTS.get(base_model, {})
+    _gs = float(instantid_config.get("guidance_scale", _preset.get("guidance_scale", 5.5)))
+    _ips = float(instantid_config.get("ip_adapter_scale", _preset.get("ip_adapter_scale", 0.90)))
+    _steps = int(instantid_config.get("num_inference_steps", _preset.get("num_inference_steps", 25)))
+    _age_stratify = bool(instantid_config.get("age_stratify", False))
     sources = get_image_paths(rawdir)
     if len(sources) < nidentities:
         raise ValueError(
@@ -237,11 +266,11 @@ def generate_identities(
     validation_app = load_arcface_model(ctxid)
     records: list[dict] = []
     skipped_seeds: list[dict] = []
+    age_counts: dict[int, int] = {}
     completed = 0
     session = InstantIDGeneratorSession(
-        base_model=instantid_config.get("base_model")
-        or "stabilityai/stable-diffusion-xl-base-1.0",
-        ip_adapter_scale=float(instantid_config.get("ip_adapter_scale", 0.90)),
+        base_model=base_model,
+        ip_adapter_scale=_ips,
         controlnet_conditioning_scale=float(
             instantid_config.get("controlnet_conditioning_scale", 0.80)
         ),
@@ -276,7 +305,7 @@ def generate_identities(
             if completed >= nidentities:
                 break
             seed_image = cv2.imread(str(seed_path))
-            seed_embedding, _, _ = get_embedding_and_attributes_robust(
+            seed_embedding, seed_age, _ = get_embedding_and_attributes_robust(
                 validation_app, seed_image, ctxid
             )
             if seed_embedding is None:
@@ -290,6 +319,24 @@ def generate_identities(
                     }
                 )
                 continue
+            # Age stratification: skip seeds from overrepresented age groups.
+            if _age_stratify and seed_age is not None and seed_age >= 0:
+                group = age_to_group(seed_age)
+                target_per_group = nidentities // len(AGE_GROUPS)
+                current = age_counts.get(group, 0)
+                if current >= target_per_group and any(
+                    age_counts.get(g, 0) < target_per_group for g in range(len(AGE_GROUPS))
+                ):
+                    reason = f"age_stratify_skip_group_{group}"
+                    skipped_seeds.append(
+                        {
+                            "seedpath": str(seed_path),
+                            "attempt": attempt_index,
+                            "reason": reason,
+                        }
+                    )
+                    continue
+                age_counts[group] = current + 1
             try:
                 identity = session.encode_identity(seed_path)
             except (FileNotFoundError, ValueError) as error:
@@ -321,10 +368,8 @@ def generate_identities(
                     seed=generation_seed,
                     width=int(instantid_config.get("width", 1024)),
                     height=int(instantid_config.get("height", 1024)),
-                    num_inference_steps=int(
-                        instantid_config.get("num_inference_steps", 35)
-                    ),
-                    guidance_scale=float(instantid_config.get("guidance_scale", 5.5)),
+                    num_inference_steps=_steps,
+                    guidance_scale=_gs,
                 )
                 # Deferred validation: ArcFace quality gating is handled by
                 # the preprocessing stage (preprocess.py), which already
@@ -380,6 +425,8 @@ def generate_identities(
         "source_image_in_final_cluster": False,
         "randomstate": randomstate,
         "min_similarity_raw": min_similarity_raw,
+        "age_stratify": _age_stratify,
+        "age_distribution": age_counts if _age_stratify else None,
     }
     (output / "generation_summary.json").write_text(json.dumps(summary, indent=2))
     if completed < nidentities:
