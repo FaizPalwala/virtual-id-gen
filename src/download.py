@@ -61,14 +61,28 @@ def download_sfhq(
     api = KaggleApi()
     api.authenticate()
 
-    print("[INFO] Fetching file list from Kaggle ...")
+    print("[INFO] Fetching file list from Kaggle (this may take a moment) ...")
     dataset_files = api.dataset_list_files(dataset_name).files
+
+    # Helper to safely extract the string path from the Kaggle file object
+    def get_file_path(file_obj):
+        if hasattr(file_obj, "name"):
+            return file_obj.name
+        elif isinstance(file_obj, dict) and "name" in file_obj:
+            return file_obj["name"]
+        return str(file_obj)
+
+    target_subfolder = "images/images"
+
     image_files = [
-        f for f in dataset_files
-        if str(f).lower().endswith((".png", ".jpg", ".jpeg"))
+        get_file_path(f) for f in dataset_files
+        if get_file_path(f).replace("\\", "/").startswith(target_subfolder)
+        and get_file_path(f).lower().endswith((".png", ".jpg", ".jpeg"))
     ]
     if not image_files:
-        raise RuntimeError(f"No image files found in {dataset_name}")
+        raise RuntimeError(
+            f"No image files found under directory '{target_subfolder}' in {dataset_name}"
+        )
 
     pool_files = image_files[:pool_size]
     actual_pool_size = len(pool_files)
