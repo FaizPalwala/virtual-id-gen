@@ -11,8 +11,13 @@ LOGGER = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Run selected independent pipeline stages in their required order."""
-    if cfg.dataset.nforget + cfg.dataset.ntest >= cfg.dataset.nidentities:
-        raise ValueError("Forget and test splits leave no retain identities.")
+    nforget = cfg.dataset.forget_steps * 2
+    ntest = int(cfg.dataset.nidentities * cfg.dataset.test_pct)
+    nidentities = cfg.dataset.nidentities
+    if nforget + ntest >= nidentities:
+        raise ValueError(
+            f"forget ({nforget}) + test ({ntest}) >= nidentities ({nidentities})"
+        )
     root = Path(cfg.dataset.dataroot)
     raw = root / "raw"
     identities = root / "identities"
@@ -25,7 +30,7 @@ def main(cfg: DictConfig) -> None:
         download_sfhq(
             cfg.dataset.part,
             str(raw),
-            num_images=cfg.dataset.nidentities,
+            num_images=nidentities,
             pool_size=cfg.dataset.get("pool_size", 4000),
         )
     if cfg.steps.generate:
@@ -34,7 +39,7 @@ def main(cfg: DictConfig) -> None:
         generate_identities(
             str(raw),
             str(identities),
-            cfg.dataset.nidentities,
+            nidentities,
             cfg.dataset.candidatesperidentity,
             cfg.pipeline.ctxid,
             cfg.dataset.seed,
@@ -69,8 +74,8 @@ def main(cfg: DictConfig) -> None:
                 str(processed),
                 str(embeddings),
                 str(dataset),
-                cfg.dataset.nforget,
-                cfg.dataset.ntest,
+                nforget,
+                ntest,
                 cfg.dataset.seed,
             ),
         )

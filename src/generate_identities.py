@@ -214,16 +214,12 @@ def generate_identities(
     randomstate: int = 42,
     min_similarity_raw: float = 0.40,
     instantid_config: dict | None = None,
-    max_seed_attempts: int | None = None,
 ) -> str:
     """Generate candidate pools until exactly ``nidentities`` valid seeds exist.
 
-    Source images are shuffled deterministically, then considered from a pool
-    larger than the requested identity count.  A source is skipped if either
+    Source images are iterated in shuffled order.  A source is skipped if
     robust ArcFace validation or InstantID seed encoding cannot find a face.
-    Generation stops immediately when ``nidentities`` clusters are completed.
-    It raises a useful error only when all available sources (or the optional
-    ``max_seed_attempts`` cap) are exhausted first.
+    Generation stops when ``nidentities`` clusters are completed.
     """
     from instantid_adapter import InstantIDGeneratorSession
 
@@ -231,8 +227,6 @@ def generate_identities(
         raise ValueError("nidentities must be positive.")
     if candidatesperidentity <= 0:
         raise ValueError("candidatesperidentity must be positive.")
-    if max_seed_attempts is not None and max_seed_attempts <= 0:
-        raise ValueError("max_seed_attempts must be positive when provided.")
 
     instantid_config = instantid_config or {}
     base_model = instantid_config.get("base_model") or (
@@ -250,7 +244,7 @@ def generate_identities(
         )
     rng = random.Random(randomstate)
     rng.shuffle(sources)
-    attempted_sources = sources[:max_seed_attempts] if max_seed_attempts else sources
+    attempted_sources = sources
 
     output = Path(outputdir)
     candidates_root = output / "candidates"
@@ -394,7 +388,6 @@ def generate_identities(
         "completed_identities": completed,
         "seed_attempts": min(len(attempted_sources), completed + len(skipped_seeds)),
         "available_source_images": len(sources),
-        "max_seed_attempts": max_seed_attempts,
         "skipped_seeds": len(skipped_seeds),
         "generated_variants_per_identity": candidatesperidentity,
         "source_image_in_final_cluster": False,
@@ -403,13 +396,9 @@ def generate_identities(
     }
     (output / "generation_summary.json").write_text(json.dumps(summary, indent=2))
     if completed < nidentities:
-        cap = (
-            f"the configured max_seed_attempts={max_seed_attempts}"
-            if max_seed_attempts
-            else "all available source images"
-        )
         raise RuntimeError(
-            f"Completed {completed}/{nidentities} identities after exhausting {cap}. "
+            f"Completed {completed}/{nidentities} identities after exhausting "
+            f"all available source images. "
             f"See {output / 'skipped_seed_manifest.csv'} for skipped seeds."
         )
     return str(output)
@@ -431,12 +420,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ctxid", type=int, default=0)
     parser.add_argument("--randomstate", type=int, default=42)
     parser.add_argument("--minsimilarityraw", type=float, default=0.40)
-    parser.add_argument(
-        "--maxseedattempts",
-        type=int,
-        default=None,
-        help="Optional cap on shuffled raw seeds considered",
-    )
     return parser
 
 
@@ -450,5 +433,4 @@ if __name__ == "__main__":
         args.ctxid,
         args.randomstate,
         args.minsimilarityraw,
-        max_seed_attempts=args.maxseedattempts,
     )

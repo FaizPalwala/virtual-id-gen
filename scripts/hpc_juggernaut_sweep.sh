@@ -96,8 +96,8 @@ for gs in "${GUIDANCE_SCALES[@]}"; do
             dataset.nidentities="$NIDENTITIES" \
             dataset.candidatesperidentity="$CANDIDATES_PER_ID" \
             dataset.seed="$SEED" \
-            dataset.nforget=0 \
-            dataset.ntest=0 \
+            dataset.forget_steps=0 \
+            dataset.test_pct=0 \
             pipeline.instantid.base_model="RunDiffusion/Juggernaut-XL-v9" \
             pipeline.instantid.guidance_scale="$gs" \
             pipeline.instantid.ip_adapter_scale="$ips" \

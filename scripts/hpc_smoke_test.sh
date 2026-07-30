@@ -103,8 +103,8 @@ python main.py --config-name step2_generate \
     dataset.nidentities=4 \
     dataset.candidatesperidentity=3 \
     dataset.seed=42 \
-    dataset.nforget=0 \
-    dataset.ntest=0 \
+    dataset.forget_steps=0 \
+    dataset.test_pct=0 \
     pipeline.instantid.base_model="RunDiffusion/Juggernaut-XL-v9" \
     > "$REPO_DIR/logs/smoke_generate_${SLURM_JOB_ID}.log" 2>&1
 
