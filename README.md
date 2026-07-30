@@ -20,7 +20,7 @@ deletion schedules.
 | **Output resolution** | 128×128 RGB (aligned face crops) |
 | **Identities** | 600 |
 | **Images per identity** | 75 (balanced, trimmed at build) / 85:40:20 gradient (imbalanced) |
-| **Total images** | 45,000 (balanced) / 22,500 (imbalanced) |
+| **Total images** | 45,000 (balanced) / ~19,500 (imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
 | **Labels (balanced)** | `clusterid`, `age_group`, `split`, `forget_step`, `forget_variant` |
