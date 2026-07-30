@@ -30,7 +30,11 @@ IDENTITIES_PER_SHARD = 100
 
 
 def merge_shards(
-    outputdir: str, mergeddir: str, rawdir: str = "", shard_count: int = 4
+    outputdir: str,
+    mergeddir: str,
+    rawdir: str = "",
+    shard_count: int = 4,
+    identities_per_shard: int = 100,
 ) -> str:
     root = Path(outputdir)
     merged = Path(mergeddir)
@@ -52,7 +56,7 @@ def merge_shards(
             continue
 
         df = pd.read_csv(manifest)
-        base_id = shard_id * IDENTITIES_PER_SHARD
+        base_id = shard_id * identities_per_shard
         df["identityid"] = df["identityid"].astype(int) + base_id
         df["clusterid"] = df["clusterid"].astype(int) + base_id
 
@@ -126,6 +130,14 @@ if __name__ == "__main__":
         "--mergeddir", required=True, help="Where to write the unified identities/ output"
     )
     p.add_argument("--shardcount", type=int, default=4, dest="shard_count")
+    p.add_argument(
+        "--identitiespershard",
+        "--identities-per-shard",
+        type=int,
+        default=100,
+        dest="identities_per_shard",
+        help="Number of identities generated per shard",
+    )
     p.add_argument(
         "--rawdir",
         default="",
