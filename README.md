@@ -99,6 +99,19 @@ are model-aware — resolved from `MODEL_DEFAULTS` in `generate_identities.py`
 based on the selected `base_model`.  Juggernaut: 3.0 / 0.85 / 30; SDXL base:
 5.5 / 0.90 / 25.  Override via CLI (`pipeline.instantid.guidance_scale=4.0`).
 
+### Prompt system
+
+Prompts are defined in [`src/prompts.py`](src/prompts.py).  A **20 × 5 = 100**
+grid of unique variation prompts combines
+
+- 20 composition tuples (pose + expression + setting + camera lens)
+- 5 lighting treatments (window, studio, daylight, golden hour, overcast)
+
+Each identity gets a **deterministically shuffled** subset of 85 prompts from
+the pool, seeded by the identity's cluster ID.  Every candidate in a shard
+receives a unique prompt — no two candidates share the same rendering
+instruction within an identity.
+
 Full configuration in [`conf/config.yaml`](conf/config.yaml).
 
 ## Quick start
@@ -168,14 +181,37 @@ identity's images are split across retain/test/forget.  This is enforced by
 `validate_release.py` and must hold for any machine-unlearning evaluation to be
 valid.
 
+### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
+
+An extra artifact produced alongside the balanced dataset.  Shares the same
+identity pool and split assignment but prunes images to a **75:50:25 gradient**
+across three popularity bins:
+
+| Bin | Identities | Images/ID | Total images |
+|---|---|---|---|
+| High (top 10%) | 60 | 75 | 4,500 |
+| Medium (30%) | 180 | 50 | 9,000 |
+| Low (bottom 60%) | 360 | 25 | 9,000 |
+
+| Column | Type | Description |
+|---|---|---|
+| ... | ... | All columns from the balanced schema |
+| `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
+| `images_per_identity` | int | Actual per-identity image count (25, 50, or 75) |
+
+Designed for stress-testing: high-popularity identities are over-learned
+(harder to forget), low-popularity identities are under-learned (easier to
+scrub).  Evaluators can plot unlearning efficacy against *images_per_identity*
+to test for a monotonic relationship.
+
 ## What is released / what is not
 
 | Released ✅ | Withheld ❌ |
 |---|---|
 | Aligned 128×128 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
 | `dataset.csv` + `.parquet` | Raw unaligned generation outputs (`candidates/`) |
-| `datasetsummary.json` | ArcFace embedding vectors |
-| `identitymanifest.csv` | Seed-to-output linkage table |
+| `dataset_imbalanced.csv` + `.parquet` | ArcFace embedding vectors |
+| `datasetsummary.json` / `datasetsummary_imbalanced.json` | Seed-to-output linkage table |
 | Checksums (`checksums.sha256`) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
 | Schema (`schema.json`) | Rejected / low-quality candidates |
 | Release manifest (`RELEASE_MANIFEST.json`) | Logs, conda envs, model caches |
