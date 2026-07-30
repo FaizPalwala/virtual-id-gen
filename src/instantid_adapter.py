@@ -192,6 +192,7 @@ def patch_legacy_instantid_check_inputs(pipe) -> bool:
         return False
 
     def check_inputs(self, *args, **kwargs):
+        """Bridge legacy 14-arg positional calls to modern keyword API."""
         if kwargs or len(args) != 14:
             return original(*args, **kwargs)
         names = (
@@ -264,6 +265,10 @@ class InstantIDGeneratorSession:
         cache_dir: Path | None = None,
         require_cuda: bool = True,
     ):
+        """Load SDXL pipeline, ControlNet, InstantID adapter, and InsightFace.
+
+        All models are loaded once and reused for the session lifetime.
+        """
         validate_generation_settings(
             8, 8, 1, ip_adapter_scale, controlnet_conditioning_scale
         )
