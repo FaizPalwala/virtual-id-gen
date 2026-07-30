@@ -105,12 +105,12 @@ cd "$SHARD_TMPDIR/repo/src"
 # Each shard writes into its own dataroot so the twelve array tasks don't
 # overwrite each other.  After the job finishes, merge with hpc_merge.sh.
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
-mkdir -p "$SHARD_DATA/raw"
+mkdir -p "$SHARD_DATA/seeds"
 
 # Source images are shared — copy once per shard
-if [ -d "$SHARD_TMPDIR/data/raw" ]; then
-    if [ ! -d "$SHARD_DATA/raw" ] || [ -z "$(ls -A "$SHARD_DATA/raw" 2>/dev/null)" ]; then
-        cp -r "$SHARD_TMPDIR/data/raw/." "$SHARD_DATA/raw/"
+if [ -d "$SHARD_TMPDIR/data/seeds" ]; then
+    if [ ! -d "$SHARD_DATA/seeds" ] || [ -z "$(ls -A "$SHARD_DATA/seeds" 2>/dev/null)" ]; then
+        cp -r "$SHARD_TMPDIR/data/seeds/." "$SHARD_DATA/seeds/"
     fi
 fi
 

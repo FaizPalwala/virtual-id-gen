@@ -5,7 +5,7 @@ Reads a sfhq_dataset.csv (or identitymanifest.csv) produced by the HPC pipeline,
 rewrites every ``imagepath`` to a release-relative path of the form
 ``images/identity_NNN/CCC.png``, and writes the result back.
 
-Also validates that no stale ``/tmp/``, ``/home/``, ``raw/``, or seed filenames
+Also validates that no stale ``/tmp/``, ``/home/``, ``/seeds/``, or seed filenames
 remain in the published metadata — exits non-zero if any are found.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ FORBIDDEN_PATTERNS = [
     (r"^/tmp/", "TMPDIR path"),
     (r"^/scratch/", "absolute scratch path"),
     (r"/home/", "home directory path"),
-    (r"/raw/", "raw source image directory"),
+    (r"/seeds/", "local seed image directory"),
     (r"SFHQ_pt\d_", "SFHQ seed filename"),
     (r"^\d+\.(jpg|png)$", "bare filename (not release-relative)"),
 ]

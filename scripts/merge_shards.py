@@ -30,7 +30,7 @@ import pandas as pd
 def merge_shards(
     outputdir: str,
     mergeddir: str,
-    rawdir: str = "",
+    seedsdir: str = "",
     shard_count: int = 4,
     identities_per_shard: int = 100,
 ) -> str:
@@ -79,12 +79,12 @@ def merge_shards(
             df.at[_, "raw_candidatepath"] = str(dst)
 
         # Rewrite stale TMPDIR seed paths to the persistent raw directory.
-        # generate_identities stores absolute /tmp/job.XXXX/.../raw/file.jpg
+        # generate_identities stores absolute /tmp/job.XXXX/.../seeds/file.jpg
         # paths in seedpath, which are dead by the time preprocessing runs.
-        if rawdir and "seedpath" in df.columns:
-            raw_root = Path(rawdir)
+        if seedsdir and "seedpath" in df.columns:
+            seeds_root = Path(seedsdir)
             df["seedpath"] = df["seedpath"].apply(
-                lambda p: str(raw_root / Path(p).name)
+                lambda p: str(seeds_root / Path(p).name)
             )
 
         all_records.append(df)
@@ -137,8 +137,8 @@ if __name__ == "__main__":
         help="Number of identities generated per shard",
     )
     p.add_argument(
-        "--rawdir",
+        "--seedsdir",
         default="",
-        help="Persistent raw/ source directory for rewriting stale TMPDIR seed paths",
+        help="Persistent seeds/ directory for rewriting stale TMPDIR seed paths",
     )
     merge_shards(**vars(p.parse_args()))

@@ -28,7 +28,7 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"^/tmp/", "TMPDIR path"),
     (r"^/scratch/", "absolute scratch path"),
     (r"/home/", "home directory path"),
-    (r"/raw/", "raw source image directory"),
+    (r"/seeds/", "local seed image directory"),
     (r"SFHQ_pt\d_", "SFHQ seed filename in path"),
     (r"^\d+\.(jpg|png)$", "bare filename (not release-relative)"),
 ]
@@ -237,7 +237,7 @@ def main() -> None:
         "--require-relative-paths",
         action="store_true",
         default=True,
-        help="Reject metadata containing /tmp/, /home/, raw/, etc.",
+        help="Reject metadata containing /tmp/, /home/, /seeds/, etc.",
     )
     parser.add_argument(
         "--no-require-relative-paths",

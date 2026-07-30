@@ -67,11 +67,11 @@ mkdir -p "$SMOKE_TMP/repo" "$SMOKE_TMP/data"
 
 echo "[$(date)] Staging repo to $SMOKE_TMP..."
 cp -r "$REPO_DIR/"* "$SMOKE_TMP/repo/" 2>/dev/null
-if [ -d "$DATA_DIR/raw" ]; then
-    cp -r "$DATA_DIR/raw" "$SMOKE_TMP/data/raw"
-    echo "  Copied source images: $(ls "$SMOKE_TMP/data/raw" | wc -l) files"
+if [ -d "$DATA_DIR/seeds" ]; then
+    cp -r "$DATA_DIR/seeds" "$SMOKE_TMP/data/seeds"
+    echo "  Copied source images: $(ls "$SMOKE_TMP/data/seeds" | wc -l) files"
 else
-    echo "  FAIL: $DATA_DIR/raw not found — source images missing?"
+    echo "  FAIL: $DATA_DIR/seeds not found — source images missing?"
     exit 1
 fi
 
@@ -89,10 +89,10 @@ fi
 # 4. Generate 4 Identities × 3 Candidates (Juggernaut-XL-v9)
 # ==========================================
 SMOKE_DATA="$SMOKE_TMP/smoke_gen"
-mkdir -p "$SMOKE_DATA/raw"
+mkdir -p "$SMOKE_DATA/seeds"
 
-if [ -d "$SMOKE_TMP/data/raw" ]; then
-    cp -r "$SMOKE_TMP/data/raw/." "$SMOKE_DATA/raw/"
+if [ -d "$SMOKE_TMP/data/seeds" ]; then
+    cp -r "$SMOKE_TMP/data/seeds/." "$SMOKE_DATA/seeds/"
 fi
 
 echo "[$(date)] Generating 4 identities × 3 candidates (Juggernaut-XL-v9)..."

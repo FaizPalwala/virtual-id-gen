@@ -66,9 +66,9 @@ SWEEP_TMP="$SCRATCH_ROOT/sweep_${SLURM_JOB_ID:-$$}"
 mkdir -p "$SWEEP_TMP/repo" "$SWEEP_TMP/data"
 echo "[$(date)] Staging to $SWEEP_TMP..."
 cp -r "$REPO_DIR/"* "$SWEEP_TMP/repo/" 2>/dev/null
-if [ -d "$DATA_DIR/raw" ]; then
-    cp -r "$DATA_DIR/raw" "$SWEEP_TMP/data/raw"
-    echo "  Copied $(ls "$SWEEP_TMP/data/raw" | wc -l) source images"
+if [ -d "$DATA_DIR/seeds" ]; then
+    cp -r "$DATA_DIR/seeds" "$SWEEP_TMP/data/seeds"
+    echo "  Copied $(ls "$SWEEP_TMP/data/seeds" | wc -l) source images"
 fi
 
 # ── Run sweep ──
@@ -80,10 +80,10 @@ for gs in "${GUIDANCE_SCALES[@]}"; do
         CURRENT=$((CURRENT + 1))
         LABEL="${gs}_${ips}"
         SWEEP_DATA="$SWEEP_TMP/sweep_$LABEL"
-        mkdir -p "$SWEEP_DATA/raw"
+        mkdir -p "$SWEEP_DATA/seeds"
 
-        if [ -d "$SWEEP_TMP/data/raw" ]; then
-            cp -r "$SWEEP_TMP/data/raw/." "$SWEEP_DATA/raw/"
+        if [ -d "$SWEEP_TMP/data/seeds" ]; then
+            cp -r "$SWEEP_TMP/data/seeds/." "$SWEEP_DATA/seeds/"
         fi
 
         echo ""
