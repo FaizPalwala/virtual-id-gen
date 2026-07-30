@@ -3,13 +3,18 @@ defaults:
 dataset:
   dataroot: ../data
   part: 1
-  nidentities: 400
+  nidentities: 600
   imagesperidentity: 75
   candidatesperidentity: 85
-  # forget_steps × 2 = forget identities (20 steps → 40 ids).
+  # forget_pct × nidentities = forget identities, distributed across
+  # forget_steps steps (uniform with remainder in first steps).
+  #   nidentities=600 → nforget=60 → 15 steps × 4 ids
+  #   nidentities=400 → nforget=40 → 15 steps: 10×3 + 5×2
+  #   nidentities=100 → nforget=10 → auto-clamp to 5 steps × 2 ids
+  # Minimum: nidentities ≥ 100, forget_steps ≥ 5.
+  forget_pct: 0.10
+  forget_steps: 15
   # test_pct × nidentities = test identities.
-  # retain = nidentities - forget - test.
-  forget_steps: 20
   test_pct: 0.15
   seed: 42
   # number of images to evaluate for CLIP+KMeans diverse selection
