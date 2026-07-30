@@ -6,6 +6,14 @@ Each identity receives a deterministic variation plan.  A plan changes only
 non-identity attributes (pose, expression, lighting, camera/background) while
 the source image remains the sole InstantID identity condition.  Every trial's
 plan, prompt, and seed are written to ``raw_candidate_manifest.csv``.
+
+Example:
+    python generate_identities.py \\
+        --rawdir ../data/raw \\
+        --outputdir ../data/identities \\
+        --nidentities 600 \\
+        --variantsperidentity 85 \\
+        --randomstate 42
 """
 from __future__ import annotations
 

@@ -4,6 +4,10 @@ build_dataset.py
 Constructs the final Phase 2 dataset mapping by merging generated identity 
 manifests with extracted embedding attributes. Applies the train/test/forget splits.
 Build the backward-compatible final ``dataset.csv`` file.
+
+Example:
+    python main.py --config-name step5_build \\
+        dataset.dataroot=../data
 """
 from __future__ import annotations
 

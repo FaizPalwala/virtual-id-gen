@@ -4,6 +4,13 @@
 by ``generateidentities.py``.  It writes all downstream artifacts beneath ``processeddir``: final
 ``identitymanifest.csv`` and cluster-preserving image folders. This isolates
 dataset construction from the candidate-generation ``identities`` directory.
+
+Example:
+    python preprocess.py \\
+        --identitydir ../data/identities \\
+        --processeddir ../data/processed \\
+        --imagesperidentity 75 \\
+        --no-strict
 """
 from __future__ import annotations
 

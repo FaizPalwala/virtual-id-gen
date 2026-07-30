@@ -8,6 +8,9 @@ from each cluster as a seed.  This replaces bulk download + age-stratified
 selection with a single, mathematically diverse pass.
 
 Requires: kaggle CLI credentials, torch, transformers, scikit-learn.
+
+Example:
+    python download.py --num_images 400 --pool_size 4000 --output_dir ../data/raw
 """
 from __future__ import annotations
 

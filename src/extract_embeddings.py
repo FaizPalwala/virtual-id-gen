@@ -5,6 +5,12 @@ Extract ArcFace features and demographic proxy attributes from final crops.
 Only run this module after ``preprocess_identity_candidates`` has created the
 final ``identities/images`` directory.  Paths written here are used verbatim by
 ``builddataset.py``.
+
+Example:
+    python extract_embeddings.py \\
+        --inputdir ../data/processed/images \\
+        --outputdir ../data/embeddings \\
+        --ctxid 0
 """
 from __future__ import annotations
 
