@@ -53,7 +53,7 @@ InstantID solves both problems:
 flowchart TD
     A[SFHQ source images<br/>CC0 synthetic, ~10k] --> B[CLIP + KMeans<br/>diverse seed selection]
     B --> C[InstantID + Juggernaut-XL-v9<br/>identity-conditioned generation]
-    C --> D[Merge 6-GPU shards]
+    C --> D[Merge 12-GPU shards]
     D --> E[MTCNN alignment<br/>sharpness + ArcFace gating]
     E --> F[ArcFace embedding extraction<br/>proxy age-group labels]
     F --> G[Identity-level splits<br/>retain / test / forget assignment]
@@ -65,7 +65,7 @@ flowchart TD
 | Phase | Script | Resources | Time | Description |
 |---|---|---|---|---|
 | 1. Download | `step1_download` | 1 CPU | ~45 min | CLIP+KMeans diverse seed selection from SFHQ |
-| 2. Generate | `hpc_generate.sh` | 6× L40S GPU | ~28 hr | 600 identities (100/shard), 85 candidates each |
+| 2. Generate | `hpc_generate.sh` | 12× L40S GPU | ~12 hr | 600 identities (50/shard), 85 candidates each |
 | 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap cluster IDs |
 | 4. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter |
 | 5. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings, proxy age-group labels |
@@ -120,7 +120,7 @@ sbatch scripts/hpc_full_pipeline.sh
 sbatch scripts/hpc_smoke_test.sh
 
 # Individual phases:
-sbatch scripts/hpc_generate.sh       # 6-GPU array
+sbatch scripts/hpc_generate.sh       # 12-GPU array
 sbatch scripts/hpc_merge.sh          # after generate completes
 sbatch scripts/hpc_preprocess.sh     # after merge completes
 sbatch scripts/hpc_extract.sh        # after preprocess completes
@@ -199,7 +199,7 @@ and privacy policy.
 | Component | Pinned value |
 |---|---|
 | Random seed | 42 (configurable) |
-| Shard seeds | 42, 44, 46, 48, 50, 52 |
+| Shard seeds | 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 |
 | Python | 3.10 |
 | PyTorch | 2.6.0+cu124 |
 | Diffusers | 0.39.0 |
