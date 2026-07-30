@@ -78,7 +78,7 @@ def generate_identities(
     seedsdir: str,
     outputdir: str,
     nidentities: int = 400,
-    candidatesperidentity: int = 39,
+    candidatesperidentity: int = 100,
     ctxid: int = 0,
     randomstate: int = 42,
     min_similarity_raw: float = 0.40,
@@ -137,10 +137,10 @@ def generate_identities(
     )
     try:
         # ------------------------------------------------------------------
-        # Precompute SDXL text embeddings for the 39 variation prompts + the
+        # Precompute SDXL text embeddings for the 100 variation prompts + the
         # shared negative prompt.  Without this the text encoder runs twice
-        # (prompt + negative) per generation — 31 200 times for a 400-identity
-        # run.  With the cache it runs exactly 40 times (39 prompts + 1 neg).
+        # (prompt + negative) per generation — 120 000 times for a 600-identity
+        # run.  With the cache it runs exactly 101 times (100 prompts + 1 neg).
         # ------------------------------------------------------------------
         prompt_texts = [var.prompt() for var in variations]
         prompt_cache, neg_embeds_tuple = session.precompute_prompt_embeddings(
@@ -192,7 +192,11 @@ def generate_identities(
             cluster_id = completed
             cluster_dir = candidates_root / f"identity_{cluster_id:03d}"
             cluster_dir.mkdir(exist_ok=True)
-            for trial, variation in enumerate(variations):
+            # Shuffle variation order per identity so each cluster gets a
+            # different random permutation of the shared 100-prompt pool.
+            shuffled_vars = list(variations)
+            rng.shuffle(shuffled_vars)
+            for trial, variation in enumerate(shuffled_vars):
                 generation_seed = (
                     randomstate + cluster_id * candidatesperidentity + trial
                 )

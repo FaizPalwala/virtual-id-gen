@@ -5,7 +5,7 @@ dataset:
   part: 1
   nidentities: 600
   imagesperidentity: 75
-  candidatesperidentity: 85
+  candidatesperidentity: 100
   # forget_pct × nidentities = forget identities, distributed across
   # forget_steps steps (uniform with remainder in first steps).
   #   nidentities=600 → nforget=60 → 15 steps × 4 ids

@@ -58,7 +58,7 @@ class VariationSpec:
         )
 
 
-def build_variation_plan(count: int = 39) -> list[VariationSpec]:
+def build_variation_plan(count: int = 100) -> list[VariationSpec]:
     """Return deterministic, diverse non-identity prompts.
 
     The first 100 entries form a balanced 20 x 5 design: 20 pose/expression/
