@@ -56,34 +56,74 @@ def download_sfhq(
 
     dataset_name = f"selfishgene/synthetic-faces-high-quality-sfhq-part-{part}"
 
-    # ── 1. Authenticate & list files ──
+    # ── 1. Authenticate ──
     print(f"[INFO] Authenticating Kaggle API for {dataset_name} ...")
     api = KaggleApi()
     api.authenticate()
 
-    print("[INFO] Fetching file list from Kaggle (this may take a moment) ...")
-    dataset_files = api.dataset_list_files(dataset_name).files
+    # ── 2. Direct Streaming (Bypassing API Truncation) ──
+    # The Kaggle API dataset_list_files notoriously truncates large datasets to the first 20 items. 
+    # Because "a small sample" comes first alphabetically, it hides the main "images/images" directory.
+    # We bypass this entirely by constructing the mathematically predictable filenames and requesting them directly.
+    print(f"[INFO] Bypassing Kaggle API truncation. Streaming {pool_size} images directly...")
+    
+    image_paths: list[str] = []
+    index = 0
+    consecutive_fails = 0
+    
+    with tqdm(total=pool_size, desc="Downloading pool images") as pbar:
+        # Stop if we hit our pool target or if we hit 500 dead links in a row
+        while len(image_paths) < pool_size and consecutive_fails < 500:
+            # The author used 8-digit padding (e.g., 00000008)
+            filename = f"SFHQ_pt1_{index:08d}.jpg"
+            
+            # The exact internal Kaggle path varies slightly, we test the valid targets
+            candidates = [
+                f"images/images/{filename}",
+                f"images/{filename}",
+                filename
+            ]
+            
+            success = False
+            for target_path in candidates:
+                try:
+                    # Attempt direct download
+                    api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
+                    
+                    # Kaggle may wrap single files in .zip; find and extract any that appeared
+                    for z in temp_dir.rglob("*.zip"):
+                        with zipfile.ZipFile(z) as zf:
+                            zf.extractall(temp_dir)
+                        z.unlink()
+                        
+                    # Find the exact downloaded file anywhere inside temp_dir
+                    # (rglob guards against Kaggle unexpectedly nesting folders during extraction)
+                    downloaded = list(temp_dir.rglob(filename))
+                    
+                    if downloaded:
+                        image_paths.append(str(downloaded[0]))
+                        success = True
+                        break
+                        
+                except Exception:
+                    # File missing on this specific candidate path, try the next one
+                    continue
+                    
+            if success:
+                consecutive_fails = 0
+                pbar.update(1)
+            else:
+                consecutive_fails += 1
+                
+            index += 1
 
-    # Helper to safely extract the string path from the Kaggle file object
-    def get_file_path(file_obj):
-        if hasattr(file_obj, "name"):
-            return file_obj.name
-        elif isinstance(file_obj, dict) and "name" in file_obj:
-            return file_obj["name"]
-        return str(file_obj)
-
-    target_subfolder = "images/images"
-
-    image_files = [
-        get_file_path(f) for f in dataset_files
-        if get_file_path(f).replace("\\", "/").startswith(target_subfolder)
-        and get_file_path(f).lower().endswith((".png", ".jpg", ".jpeg"))
-    ]
-    if not image_files:
-        raise RuntimeError(
-            f"No image files found under directory '{target_subfolder}' in {dataset_name}"
-        )
-
+    actual_pool_size = len(image_paths)
+    if not image_paths:
+        raise RuntimeError("Failed to download any images. The dataset naming convention may have changed.")
+    elif actual_pool_size < num_images:
+        print(f"\n[WARN] Only downloaded {actual_pool_size} valid images; reducing target.")
+        num_images = actual_pool_size
+        
     pool_files = image_files[:pool_size]
     actual_pool_size = len(pool_files)
     if actual_pool_size < num_images:
