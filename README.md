@@ -87,12 +87,16 @@ flowchart TD
 | `dataset.forget_pct` | 0.10 | Fraction of identities in forget set |
 | `dataset.forget_steps` | 15 | Unlearning steps (uniform distribution) |
 | `dataset.test_pct` | 0.15 | Fraction of identities in test set |
+| `dataset.skip_download` | false | Skip Kaggle download if data exists locally |
 | `pipeline.instantid.base_model` | `RunDiffusion/Juggernaut-XL-v9` | Base SDXL model |
 | `pipeline.instantid.controlnet_conditioning_scale` | 0.80 | ControlNet spatial control |
 | `pipeline.imgsize` | 128 | Final crop resolution |
 | `pipeline.min_similarity_raw` | 0.40 | ArcFace gate (generate phase) |
 | `pipeline.min_similarity_final` | 0.45 | ArcFace gate (preprocess phase) |
 | `pipeline.blurthreshold` | 80.0 | Laplacian variance sharpness floor |
+
+**Size guards:** `nidentities ≥ 100` enforced for download and build steps
+(generate-only shards bypass this).  `forget_steps ≥ 5` enforced at build.
 
 Hyperparameters (`guidance_scale`, `ip_adapter_scale`, `num_inference_steps`)
 are model-aware — resolved from `MODEL_DEFAULTS` in `generate_identities.py`
@@ -153,11 +157,12 @@ caches stay on home storage.
 
 ```bash
 cd src
-python main.py --config-name step1_download   # download diverse seeds
+# Precomputed CLIP features — use --skip-download after first run:
+python main.py --config-name step1_download dataset.skip_download=false
 python main.py --config-name step2_generate   # generate
 python main.py --config-name step3_preprocess # align + filter
 python main.py --config-name step4_extract    # embeddings
-python main.py --config-name step5_build      # assemble dataset
+python main.py --config-name step5_build      # build balanced + imbalanced
 ```
 
 Each step accepts Hydra overrides; see [`conf/config.yaml`](conf/config.yaml)
