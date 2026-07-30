@@ -18,7 +18,7 @@ dataset:
   test_pct: 0.15
   seed: 42
   # number of images to evaluate for CLIP+KMeans diverse selection
-  pool_size: 4000
+  pool_size: 12000
 pipeline:
   ctxid: 0
   imgsize: 128
