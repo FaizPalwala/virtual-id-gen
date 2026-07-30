@@ -12,14 +12,8 @@ LOGGER = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     """Run selected independent pipeline stages in their required order."""
     nidentities = cfg.dataset.nidentities
-    forget_pct = cfg.dataset.forget_pct
     forget_steps = cfg.dataset.forget_steps
-
-    # Minimum dataset size guards.
-    if nidentities < 100:
-        raise ValueError(f"nidentities must be ≥ 100 (got {nidentities})")
-    if forget_steps < 5:
-        raise ValueError(f"forget_steps must be ≥ 5 (got {forget_steps})")
+    forget_pct = cfg.dataset.forget_pct
 
     nforget = int(nidentities * forget_pct)
     ntest = int(nidentities * cfg.dataset.test_pct)
@@ -81,6 +75,12 @@ def main(cfg: DictConfig) -> None:
             str(processed / "images"), str(embeddings), cfg.pipeline.ctxid
         )
     if cfg.steps.build:
+        # Minimum dataset size guards (only enforced during build).
+        if nidentities < 100:
+            raise ValueError(f"nidentities must be ≥ 100 (got {nidentities})")
+        if forget_steps < 5:
+            raise ValueError(f"forget_steps must be ≥ 5 (got {forget_steps})")
+
         from build_dataset import build_dataset
 
         LOGGER.info(
