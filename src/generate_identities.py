@@ -193,10 +193,11 @@ def generate_identities(
             cluster_dir = candidates_root / f"identity_{cluster_id:03d}"
             cluster_dir.mkdir(exist_ok=True)
             # Shuffle variation order per identity so each cluster gets a
-            # different random permutation of the shared 100-prompt pool.
+            # different random permutation of the shared 100-prompt pool,
+            # then slice to candidatesperidentity (85).
             shuffled_vars = list(variations)
             rng.shuffle(shuffled_vars)
-            for trial, variation in enumerate(shuffled_vars):
+            for trial, variation in enumerate(shuffled_vars[:candidatesperidentity]):
                 generation_seed = (
                     randomstate + cluster_id * candidatesperidentity + trial
                 )
