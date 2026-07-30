@@ -20,8 +20,29 @@ from PIL import Image
 
 OUTPUT_COLUMNS = [
     "image_path", "clusterid", "age_group", "age", "gender",
-    "split", "forget_step",
+    "split", "forget_step", "forget_variant",
 ]
+
+
+def _distribute_forget(
+    forget_ids: list[int], nforget: int, forget_steps: int, rng: np.random.RandomState,
+) -> dict[int, tuple[int, int]]:
+    """Assign forget identities to steps with uniform+remainder distribution.
+
+    Returns ``{clusterid: (step, variant)}`` where *step* is 0-based and
+    *variant* is the index within the step.
+    """
+    base = nforget // forget_steps
+    remainder = nforget % forget_steps
+
+    mapping: dict[int, tuple[int, int]] = {}
+    pos = 0
+    for step in range(forget_steps):
+        count = base + (1 if step < remainder else 0)
+        for variant in range(count):
+            mapping[forget_ids[pos]] = (step, variant)
+            pos += 1
+    return mapping
 
 
 def build_dataset(
@@ -30,6 +51,7 @@ def build_dataset(
     outputdir: str,
     nforget: int = 40,
     ntest: int = 60,
+    forget_steps: int = 15,
     randomstate: int = 42,
 ) -> str:
     """Merge final manifest and attributes without changing CSV output schema."""
@@ -65,16 +87,27 @@ def build_dataset(
         raise ValueError("Split sizes must leave at least one retain identity.")
     rng = np.random.RandomState(randomstate)
     rng.shuffle(identities)
-    forget, test = identities[:nforget], identities[nforget : nforget + ntest]
+    forget_ids = identities[:nforget]
+    test = identities[nforget : nforget + ntest]
     split_map = (
-        {identity: "forget" for identity in forget}
+        {identity: "forget" for identity in forget_ids}
         | {identity: "test" for identity in test}
         | {identity: "retain" for identity in identities[nforget + ntest :]}
     )
     final["split"] = final.clusterid.map(split_map)
+
+    # Distribute forget identities across steps with uniform base + remainder.
+    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
     final["forgetstep"] = (
         final.clusterid.map(
-            {identity: step // 2 for step, identity in enumerate(forget)}
+            {cid: step for cid, (step, _) in step_map.items()}
+        )
+        .fillna(-1)
+        .astype(int)
+    )
+    final["forgetvariant"] = (
+        final.clusterid.map(
+            {cid: variant for cid, (_, variant) in step_map.items()}
         )
         .fillna(-1)
         .astype(int)
@@ -173,6 +206,7 @@ def build_dataset(
             "imagepath": "image_path",
             "agegroup": "age_group",
             "forgetstep": "forget_step",
+            "forgetvariant": "forget_variant",
         }
     )[OUTPUT_COLUMNS]
     output_df["image_path"] = (
@@ -188,7 +222,12 @@ def build_dataset(
             {
                 "total_images": len(final),
                 "nclusters": len(identities),
-                "nforgetsteps": nforget,
+                "nforget_ids": nforget,
+                "forget_steps": forget_steps,
+                "distribution": {
+                    "base_per_step": nforget // forget_steps,
+                    "remainder_steps": nforget % forget_steps,
+                },
                 "split_sizes": {
                     key: int(value)
                     for key, value in final.groupby("split").size().items()
@@ -198,4 +237,3 @@ def build_dataset(
         )
     )
     return str(csv_path)
-
