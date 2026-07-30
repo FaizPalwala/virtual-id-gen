@@ -10,7 +10,7 @@ debugging prompt diversity)::
 
     from prompts import build_variation_plan, VariationSpec
 
-    plan = build_variation_plan(85)
+    plan = build_variation_plan()
     for spec in plan[:3]:
         print(spec.prompt())
 """
@@ -58,16 +58,8 @@ class VariationSpec:
         )
 
 
-def build_variation_plan(count: int = 100) -> list[VariationSpec]:
-    """Return deterministic, diverse non-identity prompts.
-
-    The first 100 entries form a balanced 20 x 5 design: 20 pose/expression/
-    setting/composition tuples crossed with 5 lighting treatments.  Counts above
-    100 repeat the composition plan with an additional deterministic lighting
-    cycle; this supports candidate oversampling without a fixed portrait prompt.
-    """
-    if count <= 0:
-        raise ValueError("variantsperidentity must be positive.")
+def build_variation_plan() -> list[VariationSpec]:
+    """Return 100 unique, deterministic prompt variations (20 × 5 design)."""
     compositions = [
         (
             "frontal head-and-shoulders pose",
@@ -206,5 +198,5 @@ def build_variation_plan(count: int = 100) -> list[VariationSpec]:
             camera=compositions[(index // len(lighting)) % len(compositions)][3],
             lighting=lighting[index % len(lighting)],
         )
-        for index in range(count)
+        for index in range(100)
     ]
