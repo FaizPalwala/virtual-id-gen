@@ -242,8 +242,9 @@ def preprocess_identity_candidates(
     (processed_root / "preprocessing_metadata.json").write_text(
         json.dumps(
             {
-                "images_per_identity": imagesperidentity,
+                "min_images_requested": imagesperidentity,
                 "final_images": len(final),
+                "images_per_identity": len(final) / max(1, final.clusterid.nunique()),
                 "rejected": len(rejected),
                 "imgsize": imgsize,
                 "candidate_manifest": str(manifest_path),
