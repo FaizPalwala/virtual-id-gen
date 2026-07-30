@@ -12,6 +12,10 @@
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
+# CUDA memory: enable expandable segments to reduce fragmentation from
+# loading SDXL + ControlNet + Juggernaut + InstantID in sequence.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 # ------------------------------------------------------------------
 # Each array task generates 50 identities with a unique random seed.
 #

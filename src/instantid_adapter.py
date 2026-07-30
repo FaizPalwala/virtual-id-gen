@@ -332,6 +332,9 @@ class InstantIDGeneratorSession:
             ).to(self.runtime.device)
             self.pipeline.unet = unet
         self.pipeline = self.pipeline.to(self.runtime.device)
+        # Clear cache after loading model bodies to reduce fragmentation
+        # before the IP-Adapter allocation.
+        torch.cuda.empty_cache()
         patch_legacy_instantid_check_inputs(self.pipeline)
         self.pipeline.load_ip_adapter_instantid(adapter_path)
         self.pipeline.set_ip_adapter_scale(float(ip_adapter_scale))
