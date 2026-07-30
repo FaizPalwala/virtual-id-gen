@@ -334,6 +334,8 @@ class InstantIDGeneratorSession:
         self.pipeline = self.pipeline.to(self.runtime.device)
         # Clear cache after loading model bodies to reduce fragmentation
         # before the IP-Adapter allocation.
+        import torch
+
         torch.cuda.empty_cache()
         patch_legacy_instantid_check_inputs(self.pipeline)
         self.pipeline.load_ip_adapter_instantid(adapter_path)
@@ -370,8 +372,6 @@ class InstantIDGeneratorSession:
         # ------------------------------------------------------------------
         # CUDA kernel auto-tuning (Ampere+ tensor cores, TF32, cuDNN)
         # ------------------------------------------------------------------
-        import torch
-
         if self.runtime.device == "cuda":
             torch.backends.cudnn.benchmark = True
             torch.backends.cuda.matmul.allow_tf32 = True
