@@ -15,7 +15,6 @@
 #SBATCH --job-name=jugg_sweep
 #SBATCH --time=0-00:30:00
 #SBATCH --partition=gpu
-#SBATCH --exclusive
 #SBATCH --gres=gpu:1
 #SBATCH --output=logs/sweep_%j.out
 #SBATCH --error=logs/sweep_%j.err
