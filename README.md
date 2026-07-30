@@ -123,7 +123,7 @@ sbatch scripts/hpc_smoke_test.sh
 sbatch scripts/hpc_generate.sh       # 12-GPU array
 sbatch scripts/hpc_merge.sh          # after generate completes
 sbatch scripts/hpc_preprocess.sh     # after merge completes
-sbatch scripts/hpc_extract.sh        # after preprocess completes
+sbatch scripts/hpc_extract.sh        # after extract completes
 sbatch scripts/hpc_build.sh          # after extract completes
 ```
 
@@ -166,7 +166,7 @@ valid.
 
 | Released ✅ | Withheld ❌ |
 |---|---|
-| Aligned 128×128 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/raw/`) |
+| Aligned 128×128 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
 | `dataset.csv` + `.parquet` | Raw unaligned generation outputs (`candidates/`) |
 | `datasetsummary.json` | ArcFace embedding vectors |
 | `identitymanifest.csv` | Seed-to-output linkage table |
