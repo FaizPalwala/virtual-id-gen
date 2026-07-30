@@ -215,7 +215,10 @@ def preprocess_identity_candidates(
             )
             continue
         else:
-            take = imagesperidentity
+            # Save all quality-passing crops — cardinality trim is now handled
+            # by the build step (balanced trims to imagesperidentity, imbalanced
+            # trims per popularity bin).
+            take = len(ranked)
         destination = output_root / f"identity_{int(cluster_id):03d}"
         destination.mkdir()
         for index, record in enumerate(
