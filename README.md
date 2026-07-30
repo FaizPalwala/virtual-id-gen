@@ -56,7 +56,7 @@ InstantID solves both problems:
 
 ```mermaid
 flowchart TD
-    A[SFHQ source images<br/>CC0 synthetic, ~10k] --> B[CLIP + KMeans<br/>diverse seed selection]
+    A[SFHQ source images<br/>CC0 synthetic, ~90k] --> B[CLIP + KMeans<br/>diverse seed selection]
     B --> C[InstantID + Juggernaut-XL-v9<br/>identity-conditioned generation]
     C --> D[Merge 12-GPU shards]
     D --> E[MTCNN alignment<br/>sharpness + ArcFace gating]
@@ -252,7 +252,7 @@ and privacy policy.
 | Diffusers | 0.39.0 |
 | CUDA | 12.6 |
 | GPU | NVIDIA L40S (46 GB) |
-| SFHQ part | 1 (~10k source images) |
+| SFHQ part | 1 (~90k source images) |
 
 Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST.json).
 
