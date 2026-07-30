@@ -22,7 +22,12 @@ def main(cfg: DictConfig) -> None:
     if cfg.steps.download:
         from download import download_sfhq
 
-        download_sfhq(cfg.dataset.part, str(raw))
+        download_sfhq(
+            cfg.dataset.part,
+            str(raw),
+            num_images=cfg.dataset.nidentities,
+            pool_size=cfg.dataset.get("pool_size", 4000),
+        )
     if cfg.steps.generate:
         from generate_identities import generate_identities
 
