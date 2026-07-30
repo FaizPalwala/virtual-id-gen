@@ -17,8 +17,7 @@ dataset:
   # test_pct × nidentities = test identities.
   test_pct: 0.15
   seed: 42
-  # number of images to evaluate for CLIP+KMeans diverse selection
-  pool_size: 12000
+  # precomputed CLIP embeddings pool size: total images in SFHQ Part 1
 pipeline:
   ctxid: 0
   imgsize: 128

@@ -1,25 +1,23 @@
 """
-Step 1: Diverse SFHQ Seed Download via CLIP + KMeans
+Step 1: Diverse SFHQ Seed Extraction via CLIP + KMeans (Bulk Download)
 
-Downloads a pool of SFHQ images from Kaggle, embeds them with CLIP to
-capture natural demographic diversity (age, gender, ethnicity), clusters
-embeddings with KMeans, and saves the single most representative image
-from each cluster as a seed.  This replaces bulk download + age-stratified
-selection with a single, mathematically diverse pass.
+Downloads the ENTIRE SFHQ Part 1 database locally as a single bulk operation.
+Since we now have the full dataset locally, we target the `images/images`
+directory directly for our seed pool. We also attempt to load precomputed
+embeddings provided with the dataset to completely bypass the slow local 
+CLIP inference step. If precomputed embeddings aren't found or don't match,
+it gracefully falls back to local PyTorch inference.
 
 Requires: kaggle CLI credentials, torch, transformers, scikit-learn.
 
 Example:
-    python download.py --num_images 400 --pool_size 4000 --output_dir ../data/raw
+    python download.py --num_images 400 --output_dir ../data/raw
 """
 from __future__ import annotations
 
 import os
 import sys
 import shutil
-import zipfile
-import threading
-import concurrent.futures
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -47,13 +45,12 @@ def download_sfhq(
     part: int = 1,
     output_dir: str = "../data/raw",
     num_images: int = 400,
-    pool_size: int = 12000,
 ) -> str:
     """Download *num_images* diverse seed images from SFHQ Part *part*.
 
-    Downloads *pool_size* images as an evaluation pool, embeds them with
-    OpenAI CLIP, clusters into *num_images* groups, and keeps the centroid-
-    closest image per cluster.
+    Downloads the entire database as the evaluation pool, attempts to load
+    precomputed embeddings (falling back to OpenAI CLIP if missing), clusters
+    into *num_images* groups, and keeps the centroid-closest image per cluster.
     """
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
@@ -63,134 +60,102 @@ def download_sfhq(
             "~/.kaggle/kaggle.json credentials."
         )
 
-    from transformers import CLIPModel, CLIPProcessor
-
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    temp_dir = output_path / "_temp_pool"
-    temp_dir.mkdir(exist_ok=True)
+    
+    # Full dataset downloaded here, then cleaned up after seed extraction
+    dataset_dir = output_path / f"sfhq_part_{part}_full"
+    dataset_dir.mkdir(exist_ok=True)
 
     dataset_name = f"selfishgene/synthetic-faces-high-quality-sfhq-part-{part}"
 
-    # ── 1. Authenticate ──
+    # ── 1. Authenticate & Download ENTIRE Dataset ──
     print(f"[INFO] Authenticating Kaggle API for {dataset_name} ...")
-    with suppress_stdout():
-        api = KaggleApi()
-        api.authenticate()
+    api = KaggleApi()
+    api.authenticate()
 
-    # ── 2. Direct Streaming (Bypassing API Truncation via Multithreading) ──
-    print(f"[INFO] Bypassing Kaggle API truncation. Streaming {pool_size} images concurrently...")
+    print(f"[INFO] Downloading and unzipping the ENTIRE database to {dataset_dir} ...")
+    print(f"[INFO] (This may take a while depending on your network connection)")
+    # Using the Kaggle API to bulk download and extract
+    api.dataset_download_files(dataset_name, path=str(dataset_dir), unzip=True)
+
+    # ── 2. Locate Images ──
+    images_dir = dataset_dir / "images" / "images"
+    if not images_dir.exists():
+        # Fallback if structural path differs slightly
+        images_dir = dataset_dir / "images"
+        if not images_dir.exists():
+             images_dir = dataset_dir
+             
+    print(f"[INFO] Indexing images in {images_dir} ...")
+    image_paths = sorted(list(images_dir.glob("*.jpg")))
     
-    image_paths: list[str] = []
+    actual_pool_size = len(image_paths)
+    if not image_paths:
+        raise RuntimeError(f"Failed to find any images in {images_dir}. Check dataset extraction.")
     
-    # Thread-safe lock for appending to our results list
-    lock = threading.Lock()
+    print(f"[INFO] Successfully loaded ALL {actual_pool_size} images for the evaluation pool.")
     
-    # We will generate a broad index range. We generate 2x the pool size to account 
-    # for missing indices (404 errors) in the dataset sequence.
-    index_range = range(0, pool_size * 2)
+    if actual_pool_size < num_images:
+        print(f"\n[WARN] Only found {actual_pool_size} images; reducing target seeds.")
+        num_images = actual_pool_size
+
+    # ── 3. Attempt to Load Precomputed Embeddings ──
+    embeddings_arr = None
+    valid_paths = [str(p) for p in image_paths]
     
-    # Helper function to run inside each thread
-    def download_single_image(idx: int) -> bool:
-        # If we've already hit our target pool size, abort early
-        with lock:
-            if len(image_paths) >= pool_size:
-                return False
-                
-        filename = f"SFHQ_pt1_{idx:08d}.jpg"
-        
-        # Test valid Kaggle target paths
-        candidates = [
-            f"images/images/{filename}",
-            f"images/{filename}",
-            filename
-        ]
-        
-        for target_path in candidates:
+    print("\n[INFO] Searching for precomputed CLIP embeddings in the dataset...")
+    # Typically saved as .npy (e.g., clip_features.npy, embeddings.npy)
+    npy_files = list(dataset_dir.rglob("*.npy"))
+    
+    for npy_file in npy_files:
+        if "clip" in npy_file.name.lower() or "embed" in npy_file.name.lower() or "feature" in npy_file.name.lower():
+            print(f"[INFO] Found potential precomputed embeddings: {npy_file}")
             try:
-                # Silencing the Kaggle API's hardcoded print statements
-                with suppress_stdout():
-                    api.dataset_download_file(dataset_name, target_path, path=str(temp_dir))
-                
-                # Check for and extract zip wrappers concurrently
-                zip_candidate = temp_dir / f"{filename}.zip"
-                if zip_candidate.exists():
-                    with zipfile.ZipFile(zip_candidate) as zf:
-                        zf.extractall(temp_dir)
-                    zip_candidate.unlink()
-                    
-                # Use glob to find the extracted file, as Kaggle might nest it
-                downloaded = list(temp_dir.rglob(filename))
-                
-                if downloaded:
-                    with lock:
-                        # Double-check pool size inside lock before appending
-                        if len(image_paths) < pool_size:
-                            image_paths.append(str(downloaded[0]))
-                            return True
+                loaded_arr = np.load(npy_file)
+                # Ensure the loaded array matches our image count exactly
+                if loaded_arr.shape[0] == actual_pool_size:
+                    print(f"[SUCCESS] Loaded precomputed embeddings perfectly matching image count ({loaded_arr.shape[0]}).")
+                    embeddings_arr = loaded_arr
+                    break
+                else:
+                    print(f"[WARN] Size mismatch: Embeddings {loaded_arr.shape[0]} vs Images {actual_pool_size}.")
+            except Exception as e:
+                print(f"[WARN] Failed to load {npy_file}: {e}")
+
+    # ── 4. Fallback: Compute CLIP embeddings locally ──
+    if embeddings_arr is None:
+        print("\n[INFO] No valid precomputed embeddings found. Falling back to local CLIP inference...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_id = "openai/clip-vit-base-patch32"
+        print(f"[INFO] Loading CLIP model ({model_id}) on {device} ...")
+        
+        from transformers import CLIPModel, CLIPProcessor
+        model = CLIPModel.from_pretrained(model_id).to(device)
+        processor = CLIPProcessor.from_pretrained(model_id)
+
+        embeddings: list[np.ndarray] = []
+        valid_paths = []
+
+        print(f"[INFO] Extracting CLIP semantic features for {len(image_paths)} images ...")
+        for img_path in tqdm(image_paths, desc="Embedding images"):
+            try:
+                img = Image.open(img_path).convert("RGB")
+                inputs = processor(images=img, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    features = model.get_image_features(**inputs)
+                features = features / features.norm(dim=-1, keepdim=True)
+                embeddings.append(features.cpu().numpy().flatten())
+                valid_paths.append(str(img_path))
             except Exception:
                 continue
                 
-        return False
-
-    # Execute downloads concurrently using 20 threads
-    max_threads = 20
-    print(f"[INFO] Launching {max_threads} download threads...")
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
-        # Submit tasks and wrap in tqdm for a progress bar
-        futures = {executor.submit(download_single_image, i): i for i in index_range}
+        embeddings_arr = np.array(embeddings)
         
-        with tqdm(total=pool_size, desc="Downloading pool images") as pbar:
-            for future in concurrent.futures.as_completed(futures):
-                success = future.result()
-                if success:
-                    pbar.update(1)
-                    
-                # Abort remaining futures if we hit our target size
-                with lock:
-                    if len(image_paths) >= pool_size:
-                        # Cancel pending futures in the queue (Python 3.9+)
-                        for f in futures:
-                            f.cancel()
-                        break
-
-    actual_pool_size = len(image_paths)
-    if not image_paths:
-        raise RuntimeError("Failed to download any images. The dataset naming convention may have changed.")
-    elif actual_pool_size < num_images:
-        print(f"\n[WARN] Only downloaded {actual_pool_size} valid images; reducing target.")
-        num_images = actual_pool_size
-
-    # ── 3. CLIP embedding ──
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model_id = "openai/clip-vit-base-patch32"
-    print(f"\n[INFO] Loading CLIP model ({model_id}) on {device} ...")
-    model = CLIPModel.from_pretrained(model_id).to(device)
-    processor = CLIPProcessor.from_pretrained(model_id)
-
-    embeddings: list[np.ndarray] = []
-    valid_paths: list[str] = []
-
-    print("[INFO] Extracting CLIP semantic features ...")
-    for img_path in tqdm(image_paths, desc="Embedding images"):
-        try:
-            img = Image.open(img_path).convert("RGB")
-            inputs = processor(images=img, return_tensors="pt").to(device)
-            with torch.no_grad():
-                features = model.get_image_features(**inputs)
-            features = features / features.norm(dim=-1, keepdim=True)
-            embeddings.append(features.cpu().numpy().flatten())
-            valid_paths.append(img_path)
-        except Exception:
-            continue
-
     if len(valid_paths) < num_images:
         num_images = len(valid_paths)
 
-    embeddings_arr = np.array(embeddings)
-
-    # ── 4. KMeans clustering → most-representative per cluster ──
+    # ── 5. KMeans clustering → most-representative per cluster ──
     print(f"\n[INFO] Clustering {len(embeddings_arr)} vectors into {num_images} groups ...")
     kmeans = KMeans(n_clusters=num_images, random_state=42, n_init="auto")
     kmeans.fit(embeddings_arr)
@@ -198,16 +163,27 @@ def download_sfhq(
         kmeans.cluster_centers_, embeddings_arr
     )
 
-    # ── 5. Save seeds ──
+    # ── 6. Save seeds directly to output_dir ──
     print(f"\n[INFO] Saving {num_images} diverse seeds to {output_path} ...")
     for idx in tqdm(closest, desc="Saving seeds"):
         src = valid_paths[idx]
         dest = output_path / f"seed_{idx:04d}.jpg"
         shutil.copy2(src, dest)
 
-    # ── 6. Cleanup ──
-    print("\n[INFO] Cleaning up temporary pool ...")
-    shutil.rmtree(temp_dir, ignore_errors=True)
+    # Clean up full dataset — only the seeds remain in output_dir
+    print("[INFO] Cleaning up full dataset download ...")
+    shutil.rmtree(dataset_dir, ignore_errors=True)
 
-    print(f"[OK] {num_images} diverse seeds saved to {output_path.resolve()}")
+    print(f"[OK] {num_images} diverse seeds successfully saved to {output_path.resolve()}")
+    
     return str(output_path)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Download SFHQ and extract diverse seeds.")
+    parser.add_argument("--num_images", type=int, default=400, help="Number of diverse seeds to extract")
+    parser.add_argument("--output_dir", type=str, default="../data/raw", help="Output directory")
+    args = parser.parse_args()
+    
+    download_sfhq(num_images=args.num_images, output_dir=args.output_dir)

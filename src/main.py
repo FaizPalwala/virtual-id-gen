@@ -46,7 +46,6 @@ def main(cfg: DictConfig) -> None:
             cfg.dataset.part,
             str(raw),
             num_images=nidentities,
-            pool_size=cfg.dataset.get("pool_size", 4000),
         )
     if cfg.steps.generate:
         from generate_identities import generate_identities
