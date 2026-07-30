@@ -267,25 +267,26 @@ def build_imbalanced_dataset(
     # creates a realistic long-tail distribution without regeneration.
     high_bin_pct: float = 0.10,    # top 10% of identities keep all 75 images
     low_bin_pct: float = 0.60,     # bottom 60% keep only low_bin_images
-    low_bin_images: int = 25,      # prune to 25 randomly selected images
-    medium_bin_images: int = 50,   # middle 30% keep 50 images (gradient 75:50:25)
+    low_bin_images: int = 20,      # prune to 20 randomly selected images
+    medium_bin_images: int = 40,   # middle 30% keep 40 images (gradient 85:40:20)
 ) -> str:
     """Build an imbalanced variant of the dataset for unlearning stress-testing.
 
     Follows the same merge/split logic as :func:`build_dataset`, then
-    applies a popularity-based down-sampling to create a **3:2:1 gradient**
-    across three bins:
+    applies a popularity-based down-sampling to create a **4.25:2:1
+    gradient** across three bins:
 
-    * High-popularity (top 10%): 75 images/identity — over-represented,
-      hardest to forget.
+    * High-popularity (top 10%): up to 85 images/identity (the max
+      available from generation) — over-represented, hardest to forget.
     * Medium (next 30%): **{medium_bin_images}** images/identity — moderately
       represented.
-    * Low-popularity (bottom 60%): {low_bin_images} images/identity — under-represented,
-      easiest to forget.
+    * Low-popularity (bottom 60%): {low_bin_images} images/identity — under-
+      represented, easiest to forget.
 
-    The 75 → 50 → 25 gradient is designed so downstream evaluation can plot
-    unlearning efficacy against *images_per_identity* and test for a monotonic
-    relationship.  Down-sampling (not up-sampling) avoids regeneration.
+    The 85 → 40 → 20 gradient mirrors real-world long-tail distributions
+    where a minority of identities (celebrities) have many images while
+    most have very few.  Downstream evaluation can plot unlearning efficacy
+    against *images_per_identity* and test for a monotonic relationship.
 
     Output columns include ``popularity_bin`` and ``images_per_identity``
     for per-bin analysis.
@@ -348,7 +349,7 @@ def build_imbalanced_dataset(
     per_bin_images = {
         "low": low_bin_images,
         "medium": medium_bin_images,
-        "high": 75,  # keep all; no pruning
+        "high": 85,  # max available from generate step
     }
     drop_mask = pd.Series(False, index=final.index)
     for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):  # low + medium
@@ -455,12 +456,12 @@ def build_imbalanced_dataset(
                 "total_images": len(imbalanced),
                 "nclusters": len(imbalanced_ids),
                 "design": (
-                    "Down-sampled to a 3:2:1 gradient: high 75 images, "
-                    f"medium {medium_bin_images} images, "
+                    "Down-sampled to a 4.25:2:1 gradient: high up to 85 "
+                    f"images, medium {medium_bin_images} images, "
                     f"low {low_bin_images} images."
                 ),
                 "images_per_bin": {
-                    "high": 75,
+                    "high": 85,
                     "medium": medium_bin_images,
                     "low": low_bin_images,
                 },
@@ -492,6 +493,6 @@ def build_imbalanced_dataset(
 
     print(f"[OK] Imbalanced dataset: {len(imbalanced)} images across "
           f"{len(imbalanced_ids)} identities — "
-          f"{n_high} high (75 img), {n_medium} medium ({medium_bin_images} img), "
+          f"{n_high} high (up to 85 img), {n_medium} medium ({medium_bin_images} img), "
           f"{n_low} low ({low_bin_images} img).")
     return str(csv_path)
