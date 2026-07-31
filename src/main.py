@@ -71,7 +71,6 @@ def main(cfg: DictConfig) -> None:
             cfg.pipeline.imgsize,
             cfg.pipeline.blurthreshold,
             cfg.pipeline.confthreshold,
-            cfg.pipeline.min_similarity_final,
             cfg.pipeline.ctxid,
         )
     if cfg.steps.extract:
