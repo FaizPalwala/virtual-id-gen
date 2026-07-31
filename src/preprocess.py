@@ -50,7 +50,7 @@ def preprocess_identity_candidates(
     identitydir: str,
     processeddir: str,
     imagesperidentity: int,
-    imgsize: int = 128,
+    imgsize: int = 224,
     blurthreshold: float = 80.0,
     confthreshold: float = 0.7,
     ctxid: int = 0,
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     parser.add_argument("--identitydir", required=True)
     parser.add_argument("--processeddir", required=True)
     parser.add_argument("--imagesperidentity", type=int, required=True)
-    parser.add_argument("--imgsize", type=int, default=128)
+    parser.add_argument("--imgsize", type=int, default=224)
     parser.add_argument("--blurthreshold", type=float, default=80.0)
     parser.add_argument("--confthreshold", type=float, default=0.7)
     parser.add_argument("--ctxid", type=int, default=0)

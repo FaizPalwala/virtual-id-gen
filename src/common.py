@@ -12,6 +12,14 @@ import numpy as np
 
 VALID_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# ImageNet training regime for downstream ResNet-18 classifiers.
+# Crops are stored as 0-255 uint8 BGR (see preprocess.py); trainers must
+# convert to RGB, resize to CROP_SIZE, and normalise with these constants
+# so ImageNet-pretrained features activate at full fidelity from epoch 1.
+CROP_SIZE = 224
+IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
 
 def get_image_paths(directory: str | Path, recursive: bool = True) -> list[Path]:
     """Return deterministic image paths below *directory*."""
