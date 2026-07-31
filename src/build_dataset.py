@@ -111,6 +111,15 @@ def build_dataset(
             print(f"  In attributes only ({len(only_attrs)}): {sorted(only_attrs)[:3]}")
         raise RuntimeError("Attribute extraction is missing final images.")
 
+    # Per-image cosine similarity to the identity's mean embedding.
+    # Computed BEFORE trimming so the reference mean spans ALL quality-passing
+    # crops from preprocess — the identity's canonical face.  The column is
+    # therefore dataset-invariant: a given image has the same arcface_similarity
+    # in the balanced and imbalanced variants, making it a valid confound
+    # control across both.  Trimming below only removes rows; it never changes
+    # the values.
+    final = _add_arcface_similarity(final)
+
     # Trim each identity to imagesperidentity (preprocess may have saved
     # more than that).  The manifest is quality-ranked, so the first N
     # rows per cluster are the best crops.
@@ -120,9 +129,6 @@ def build_dataset(
         .head(imagesperidentity)
         .reset_index(drop=True)
     )
-
-    # Per-image cosine similarity to the identity's mean embedding.
-    final = _add_arcface_similarity(final)
 
     identities = sorted(final.clusterid.unique())
     if nforget + ntest >= len(identities):
@@ -329,6 +335,15 @@ def build_imbalanced_dataset(
     if len(final) != len(manifest):
         raise RuntimeError("Attribute extraction is missing final images.")
 
+    # Per-image cosine similarity to the identity's mean embedding.
+    # Computed BEFORE pruning so the reference mean spans ALL quality-passing
+    # crops from preprocess — the identity's canonical face.  The column is
+    # therefore dataset-invariant: a given image has the same arcface_similarity
+    # in the balanced and imbalanced variants, making it a valid confound
+    # control across both.  Pruning below only removes rows; it never changes
+    # the values.
+    final = _add_arcface_similarity(final)
+
     identities = sorted(final.clusterid.unique())
 
     # ── 2. Assign popularity bins ──
@@ -358,10 +373,10 @@ def build_imbalanced_dataset(
             bin_map[cid] = "medium"
 
     # ── 3. Down-sample low- and medium-bin identities ──
-    # Design choice: low-bin identities retain low_bin_images (25), medium-bin
-    # identities retain medium_bin_images (50), producing a clean 75:50:25
-    # gradient.  High-bin identities keep all 75.  Per-identity random draws
-    # are seeded for reproducibility.
+    # Design choice: low-bin identities retain low_bin_images (20), medium-bin
+    # identities retain medium_bin_images (40), producing the 85:40:20
+    # gradient.  High-bin identities keep all available crops (up to 85).
+    # Per-identity random draws are seeded for reproducibility.
     rng_prune = np.random.RandomState(randomstate + 9998)
     per_bin_images = {
         "low": low_bin_images,
@@ -378,9 +393,6 @@ def build_imbalanced_dataset(
         drop_mask.loc[list(drop_idx)] = True
 
     imbalanced = final[~drop_mask].copy()
-
-    # Per-image cosine similarity to the identity's mean embedding.
-    imbalanced = _add_arcface_similarity(imbalanced)
 
     # ── 4. Validate post-pruning structure ──
     new_sizes = imbalanced.groupby("clusterid").size()
