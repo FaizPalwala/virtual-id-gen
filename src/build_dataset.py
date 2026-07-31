@@ -25,7 +25,41 @@ from PIL import Image
 OUTPUT_COLUMNS = [
     "image_path", "clusterid", "age_group", "age", "gender",
     "split", "forget_step", "forget_variant",
+    "arcface_similarity", "laplacian_variance", "detection_confidence",
 ]
+
+
+def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
+    """Load image-level attributes saved by extract_embeddings.py."""
+    embeddings = Path(embeddingsdir)
+    return pd.DataFrame(
+        {
+            "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
+            "agegroup": np.load(embeddings / "agegroups.npy"),
+            "age": np.load(embeddings / "ages.npy"),
+            "gender": np.load(embeddings / "genders.npy"),
+            "embedding": list(np.load(embeddings / "embeddings.npy")),
+        }
+    )
+
+
+def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
+    """Add per-image cosine similarity to the identity's mean embedding.
+
+    Confound control: an image far from its identity's canonical face
+    (unusual angle/expression) is memorised differently from a canonical
+    portrait.  Without this control, per-identity MIA AUC is confounded
+    by within-identity variance.
+    """
+    from common import normalised_cosine_similarity
+
+    # Mean embedding per cluster (embeddings are already L2-normalised).
+    means = final.groupby("clusterid")["embedding"].mean()
+    final["arcface_similarity"] = [
+        normalised_cosine_similarity(row.embedding, means[row.clusterid])
+        for row in final.itertuples(index=False)
+    ]
+    return final
 
 
 def _distribute_forget(
@@ -61,16 +95,8 @@ def build_dataset(
 ) -> str:
     """Merge final manifest and attributes, trim to imagesperidentity per cluster."""
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
-    embeddings = Path(embeddingsdir)
-    attributes = pd.DataFrame(
-        {
-            "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
-            "agegroup": np.load(embeddings / "agegroups.npy"),
-            "age": np.load(embeddings / "ages.npy"),
-            "gender": np.load(embeddings / "genders.npy"),
-        }
-    )
-    final = manifest[["imagepath", "clusterid", "detection_confidence"]].merge(
+    attributes = _load_attributes(embeddingsdir)
+    final = manifest[["imagepath", "clusterid", "detection_confidence", "laplacian_variance"]].merge(
         attributes, on="imagepath", how="inner", validate="one_to_one"
     )
     if len(final) != len(manifest):
@@ -94,6 +120,9 @@ def build_dataset(
         .head(imagesperidentity)
         .reset_index(drop=True)
     )
+
+    # Per-image cosine similarity to the identity's mean embedding.
+    final = _add_arcface_similarity(final)
 
     identities = sorted(final.clusterid.unique())
     if nforget + ntest >= len(identities):
@@ -293,16 +322,8 @@ def build_imbalanced_dataset(
     """
     # ── 1. Read and merge manifests (same as build_dataset) ──
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
-    embeddings = Path(embeddingsdir)
-    attributes = pd.DataFrame(
-        {
-            "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
-            "agegroup": np.load(embeddings / "agegroups.npy"),
-            "age": np.load(embeddings / "ages.npy"),
-            "gender": np.load(embeddings / "genders.npy"),
-        }
-    )
-    final = manifest[["imagepath", "clusterid", "detection_confidence"]].merge(
+    attributes = _load_attributes(embeddingsdir)
+    final = manifest[["imagepath", "clusterid", "detection_confidence", "laplacian_variance"]].merge(
         attributes, on="imagepath", how="inner", validate="one_to_one"
     )
     if len(final) != len(manifest):
@@ -357,6 +378,9 @@ def build_imbalanced_dataset(
         drop_mask.loc[list(drop_idx)] = True
 
     imbalanced = final[~drop_mask].copy()
+
+    # Per-image cosine similarity to the identity's mean embedding.
+    imbalanced = _add_arcface_similarity(imbalanced)
 
     # ── 4. Validate post-pruning structure ──
     new_sizes = imbalanced.groupby("clusterid").size()
