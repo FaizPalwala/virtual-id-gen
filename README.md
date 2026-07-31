@@ -17,7 +17,7 @@ deletion schedules.
 |---|---|
 | **Source domain** | SFHQ (CC0 synthetic portraits) |
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
-| **Output resolution** | 128×128 RGB (aligned face crops) |
+| **Output resolution** | 224×224 RGB (aligned face crops) |
 | **Identities** | 600 |
 | **Images per identity** | 75 (balanced, trimmed at build) / 85:40:20 gradient (imbalanced) |
 | **Total images** | 45,000 (balanced) / ~19,500 (imbalanced) |
@@ -95,7 +95,7 @@ separation lets you modify the gradient without re-running quality checks.
 | `dataset.skip_download` | false | Skip Kaggle download if data exists locally |
 | `pipeline.instantid.base_model` | `RunDiffusion/Juggernaut-XL-v9` | Base SDXL model |
 | `pipeline.instantid.controlnet_conditioning_scale` | 0.80 | ControlNet spatial control |
-| `pipeline.imgsize` | 128 | Final crop resolution |
+| `pipeline.imgsize` | 224 | Final crop resolution |
 | `pipeline.min_similarity_raw` | 0.40 | ArcFace gate (generate phase) |
 | `pipeline.min_similarity_final` | 0.45 | ArcFace gate (preprocess phase) |
 | `pipeline.blurthreshold` | 80.0 | Laplacian variance sharpness floor |
@@ -182,9 +182,20 @@ for all tunables.
 | `image_path` | string | Relative path: `processed/images/identity_NNN/accepted_XXX.jpg` |
 | `clusterid` | int (0–599) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior |
+| `age` | int | Raw InsightFace age estimate |
+| `gender` | int (0/1) | InsightFace gender classifier output |
 | `split` | string | `retain`, `test`, or `forget` |
 | `forget_step` | int (0–14, -1) | Unlearning step; -1 for non-forget |
 | `forget_variant` | int (0–N, -1) | Variant index within a forget step; -1 for non-forget |
+| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean ArcFace embedding (confound control) |
+| `laplacian_variance` | float | Sharpness score from quality filter (quality confound control) |
+| `detection_confidence` | float | Face detector confidence (alignment quality control) |
+
+All crops are stored as **224×224** uint8 BGR.  Downstream classifiers using
+ImageNet-pretrained backbones (e.g. ResNet-18) must convert to RGB and
+normalise with ImageNet statistics — `CROP_SIZE`, `IMAGENET_MEAN`,
+`IMAGENET_STD` are exported from `src/common.py`.  This matches the ImageNet
+training regime so pretrained features activate at full fidelity from epoch 1.
 
 **Critical invariant:** Every `clusterid` maps to exactly one `split`.  No
 identity's images are split across retain/test/forget.  This is enforced by
@@ -205,7 +216,7 @@ gradient** (4.25:2:1 ratio) across three popularity bins:
 
 | Column | Type | Description |
 |---|---|---|
-| ... | ... | All columns from the balanced schema |
+| ... | ... | All columns from the balanced schema (incl. gender, arcface_similarity, laplacian_variance, detection_confidence) |
 | `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
 | `images_per_identity` | int | Actual per-identity image count (up to 85, 40, or 20) |
 
