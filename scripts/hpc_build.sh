@@ -13,9 +13,9 @@
 # Pure-CPU step: merges the final identity manifest with extracted
 # embeddings/attributes and applies train/test/forget splits.
 #
-# Input:  $DATA_DIR/merged/processed/identitymanifest.csv
-#         $DATA_DIR/merged/embeddings/
-# Output: $DATA_DIR/merged/dataset/sfhqdataset.csv
+# Input:  $DATA_DIR/processed/identitymanifest.csv
+#         $DATA_DIR/embeddings/
+# Output: $DATA_DIR/dataset/dataset.csv
 # ------------------------------------------------------------------
 
 # ==========================================

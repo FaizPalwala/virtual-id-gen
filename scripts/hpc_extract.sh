@@ -16,8 +16,8 @@
 #   - ArcFace feature vectors (512-d identity embeddings)
 #   - Demographic proxy attributes (age group, gender)
 #
-# Input:  $DATA_DIR/merged/processed/images/
-# Output: $DATA_DIR/merged/embeddings/
+# Input:  $DATA_DIR/processed/images/
+# Output: $DATA_DIR/embeddings/
 # ------------------------------------------------------------------
 
 # ==========================================
@@ -54,7 +54,7 @@ echo "[$(date)] Starting embedding extraction..."
 cd "$REPO_DIR/src"
 
 # python main.py --config-name step4_extract \
-#     dataset.dataroot="$DATA_DIR/merged" \
+#     dataset.dataroot="$DATA_DIR" \
 #     > "$REPO_DIR/logs/extract_${SLURM_JOB_ID}.log" 2>&1
 
 python main.py --config-name step4_extract \

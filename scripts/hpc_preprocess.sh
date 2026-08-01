@@ -18,8 +18,8 @@
 #   - ArcFace similarity gating (keeps images close to the source identity)
 #   - Final per-identity selection (keeps the best N images)
 #
-# Input:  $DATA_DIR/merged/identities/
-# Output: $DATA_DIR/merged/processed/
+# Input:  $DATA_DIR/identities/
+# Output: $DATA_DIR/processed/
 # ------------------------------------------------------------------
 
 # ==========================================
