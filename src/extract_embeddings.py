@@ -56,10 +56,18 @@ def get_embedding_and_attributes(app, image_bgr: np.ndarray):
 
 
 def get_embedding_cpu(app, crop_bgr: np.ndarray):
-    """On CPU the detector cannot find faces in aligned crops — supply
-    standard 5‑point landmarks so the recognition model can run norm_crop.
-    The crops are already MTCNN‑aligned, so the affine transform computed
-    from these keypoints will be close to identity."""
+    """Crops are already MTCNN-aligned — use standard 5‑point landmarks.
+
+    The InsightFace detector fails on tight aligned crops (face fills the
+    frame), so we bypass detection entirely.  Recognition and genderage both
+    use the same standard landmarks via a real ``Face`` object that supports
+    both attribute access (``face.kps`` for recognition) and dict-style
+    writes (``face['gender']`` for genderage).
+
+    Returns real demographics — not hardcoded constants.
+    """
+    from insightface.app.common import Face
+
     h, w = crop_bgr.shape[:2]
     kps_112 = np.array(
         [
@@ -72,16 +80,17 @@ def get_embedding_cpu(app, crop_bgr: np.ndarray):
         dtype=np.float32,
     )
     kps = kps_112 * (w / 112.0)
+    face = Face(bbox=np.array([0, 0, w, h], dtype=np.float32), kps=kps)
 
-    class _FaceStub:
-        bbox = np.array([0, 0, w, h], dtype=np.float32)
-
-    _FaceStub.kps = kps  # class body scope can't capture enclosing local
-
-    embedding = app.models["recognition"].get(crop_bgr, _FaceStub)
+    embedding = app.models["recognition"].get(crop_bgr, face)
     if embedding is None:
         return None, None, None
-    return np.asarray(embedding, dtype=np.float32), 25, 0
+    app.models["genderage"].get(crop_bgr, face)  # sets face.age, face.gender
+    return (
+        np.asarray(embedding, dtype=np.float32),
+        int(getattr(face, "age", 25)),
+        int(getattr(face, "gender", 0)),
+    )
 
 def get_embedding_and_attributes_robust(app, image_bgr: np.ndarray, ctxid: int):
     """Return largest-face attributes from an unaligned/raw image.
