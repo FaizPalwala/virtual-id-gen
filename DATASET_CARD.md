@@ -180,3 +180,7 @@ InstantID, ControlNet, and InsightFace models.  See
 ```
 
 See [`CITATION.cff`](CITATION.cff) for the complete metadata file.
+
+## Acknowledgements
+
+This work was undertaken on the Aire HPC system at the University of Leeds, UK.

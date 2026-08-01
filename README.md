@@ -312,6 +312,10 @@ Issues.  For feature requests or extensions, please open a discussion first.
 - Juggernaut-XL-v9: [RunDiffusion/Juggernaut-XL-v9](https://huggingface.co/RunDiffusion/Juggernaut-XL-v9)
 - InsightFace: [deepinsight/insightface](https://github.com/deepinsight/insightface)
 
+## Acknowledgements
+
+This work was undertaken on the Aire HPC system at the University of Leeds, UK.
+
 ---
 
 *This dataset is a research artifact for machine unlearning evaluation.  It is
