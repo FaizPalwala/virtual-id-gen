@@ -71,10 +71,8 @@ def preprocess_identity_candidates(
         candidates.raw_status.isin(["accepted_raw", "unvalidated"])
     ].copy()
     output_root = processed_root / "images"
-    rejected_root = processed_root / "rejected"
     shutil.rmtree(output_root, ignore_errors=True)
     output_root.mkdir(parents=True, exist_ok=True)
-    rejected_root.mkdir(parents=True, exist_ok=True)
 
     app = load_arcface_model(ctxid)
     mtcnn = _make_mtcnn(imgsize, confthreshold)

@@ -117,7 +117,6 @@ def generate_identities(
 
     output = Path(outputdir)
     candidates_root = output / "candidates"
-    rejected_root = output / "rejected"
     candidates_root.mkdir(parents=True, exist_ok=True)
     variations = build_variation_plan()
     validation_app = load_arcface_model(ctxid)
