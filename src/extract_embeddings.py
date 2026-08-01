@@ -21,6 +21,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from common import get_image_paths
@@ -133,15 +134,36 @@ def age_to_group(age: int) -> int:
     return 3
 
 
-def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
-    """Extract arrays for all final crops, retaining only detectable faces."""
+def extract_embeddings(
+    inputdir: str,
+    outputdir: str,
+    ctxid: int = 0,
+    candidate_manifest: str | None = None,
+) -> str:
+    """Extract arrays for all images, retaining only detectable faces.
+
+    When *candidate_manifest* is provided (raw_candidate_manifest.csv from the
+    merge step), identity IDs are joined through the manifest and saved as
+    ``identity_ids.npy``.  This decouples embedding storage from image paths,
+    allowing the build step to join through identity rather than file name.
+    """
     input_path, output_path = Path(inputdir), Path(outputdir)
     output_path.mkdir(parents=True, exist_ok=True)
     image_paths = get_image_paths(input_path)
     if not image_paths:
         raise FileNotFoundError(f"No final images found under {input_path}")
+
+    # Build identity lookup from the candidate manifest when available.
+    identity_map: dict[str, int] = {}
+    if candidate_manifest:
+        manifest = pd.read_csv(candidate_manifest)
+        # Identity column in the raw manifest (pre-sweep: identity_id).
+        id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
+        for _, row in manifest.iterrows():
+            identity_map[str(row["raw_candidatepath"])] = int(row[id_col])
+
     app = load_arcface_model(ctxid)
-    embeddings, paths, ages, genders, groups = [], [], [], [], []
+    embeddings, paths, ages, genders, groups, identity_ids = [], [], [], [], [], []
     for image_path in tqdm(image_paths, desc="Extracting ArcFace features"):
         image = cv2.imread(str(image_path))
         if image is None:
@@ -151,18 +173,23 @@ def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
             embedding, age, gender = get_embedding_cpu(app, image)
         if embedding is None:
             continue
+        relative = str(image_path.relative_to(input_path.parent))
         embeddings.append(np.asarray(embedding, dtype=np.float32))
-        paths.append(str(image_path.relative_to(input_path.parent)))
+        paths.append(relative)
         ages.append(age)
         genders.append(gender)
         groups.append(age_to_group(age))
+        if identity_map:
+            identity_ids.append(identity_map.get(relative, -1))
     if not embeddings:
-        raise RuntimeError("No final images contained a detectable face.")
+        raise RuntimeError("No images contained a detectable face.")
     np.save(output_path / "embeddings.npy", np.stack(embeddings))
     np.save(output_path / "imagepaths.npy", np.asarray(paths))
     np.save(output_path / "ages.npy", np.asarray(ages, dtype=np.int16))
     np.save(output_path / "genders.npy", np.asarray(genders, dtype=np.int8))
     np.save(output_path / "agegroups.npy", np.asarray(groups, dtype=np.int8))
+    if identity_map:
+        np.save(output_path / "identity_ids.npy", np.asarray(identity_ids, dtype=np.int16))
     summary = {
         "total_input": len(image_paths),
         "total_extracted": len(paths),
@@ -170,6 +197,9 @@ def extract_embeddings(inputdir: str, outputdir: str, ctxid: int = 0) -> str:
         "embedding_dim": 512,
         "age_group_distribution": dict(Counter(groups)),
     }
+    if identity_map:
+        summary["candidate_manifest"] = candidate_manifest
+        summary["matched_identity_ids"] = len([i for i in identity_ids if i >= 0])
     (output_path / "embeddingsummary.json").write_text(json.dumps(summary, indent=2))
     return str(output_path)
 

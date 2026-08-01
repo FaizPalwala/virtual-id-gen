@@ -12,11 +12,11 @@
 #SBATCH --error=logs/%x_%j.err
 
 # ------------------------------------------------------------------
-# Runs extract_embeddings on the final preprocessed images:
-#   - ArcFace feature vectors (512-d identity embeddings)
-#   - Demographic proxy attributes (age group, gender)
+# Runs extract_embeddings on the 1024×1024 raw candidates BEFORE
+# preprocessing.  Detection on full-size portraits works reliably
+# (unlike on tight aligned crops), giving real demographics.
 #
-# Input:  $DATA_DIR/processed/images/
+# Input:  $DATA_DIR/identities/candidates/
 # Output: $DATA_DIR/embeddings/
 # ------------------------------------------------------------------
 
@@ -53,12 +53,9 @@ echo "[$(date)] Starting embedding extraction..."
 
 cd "$REPO_DIR/src"
 
-# python main.py --config-name step4_extract \
-#     dataset.dataroot="$DATA_DIR" \
-#     > "$REPO_DIR/logs/extract_${SLURM_JOB_ID}.log" 2>&1
-
 python main.py --config-name step4_extract \
     dataset.dataroot="$DATA_DIR" \
+    dataset.candidate_manifest="$DATA_DIR/identities/raw_candidate_manifest.csv" \
     > "$REPO_DIR/logs/extract_hyb_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?

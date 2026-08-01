@@ -77,7 +77,10 @@ def main(cfg: DictConfig) -> None:
         from extract_embeddings import extract_embeddings
 
         extract_embeddings(
-            str(processed / "images"), str(embeddings), cfg.pipeline.ctxid
+            str(identities / "candidates"),
+            str(embeddings),
+            cfg.pipeline.ctxid,
+            candidate_manifest=str(identities / "raw_candidate_manifest.csv"),
         )
     if cfg.steps.build:
         from build_dataset import build_dataset
