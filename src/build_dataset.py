@@ -23,7 +23,7 @@ import pandas as pd
 from PIL import Image
 
 OUTPUT_COLUMNS = [
-    "image_path", "clusterid", "age_group", "age", "gender",
+    "image_path", "identity_id", "age_group", "age", "gender",
     "split", "forget_step", "forget_variant",
     "arcface_similarity", "laplacian_variance", "detection_confidence",
 ]
@@ -252,6 +252,7 @@ def build_dataset(
     output_df = final.rename(
         columns={
             "imagepath": "image_path",
+            "clusterid": "identity_id",
             "agegroup": "age_group",
             "forgetstep": "forget_step",
             "forgetvariant": "forget_variant",
@@ -461,6 +462,7 @@ def build_imbalanced_dataset(
     output_df = imbalanced.rename(
         columns={
             "imagepath": "image_path",
+            "clusterid": "identity_id",
             "agegroup": "age_group",
             "forgetstep": "forget_step",
             "forgetvariant": "forget_variant",
