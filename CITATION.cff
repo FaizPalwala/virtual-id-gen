@@ -12,16 +12,21 @@ doi: TODO
 url: "https://github.com/FaizPalwala/virtual-id-gen"
 repository-code: "https://github.com/FaizPalwala/virtual-id-gen"
 abstract: >
-  A synthetic, identity-conditioned face dataset of 16,000 images
-  (400 identities × 40 images) generated via InstantID + SDXL from CC0
-  synthetic SFHQ seed images.  Designed as a benchmark for machine
-  unlearning with identity-level split isolation and a sequential 40-step
-  forgetting protocol.  Images are 128×128 aligned face crops with proxy
-  age-group labels.
+  A synthetic, identity-conditioned face dataset of 45,000 images
+  (600 identities × 75 images, plus a companion imbalanced variant with an
+  85:40:20 popularity gradient) generated via InstantID + Juggernaut-XL-v9
+  from CC0 synthetic SFHQ seed images.  Designed as a benchmark for machine
+  unlearning with identity-level split isolation (retain 450 / test 90 /
+  forget 60 identities) and a sequential 15-step forgetting protocol.
+  Images are 224×224 aligned face crops with proxy age-group labels and
+  confound-control columns (arcface similarity, sharpness, detection
+  confidence, gender).
 keywords:
   - synthetic face dataset
   - machine unlearning
   - identity-conditioned generation
   - InstantID
+  - Juggernaut-XL-v9
   - SDXL
+  - long-tail distribution
 license: other

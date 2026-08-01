@@ -1,38 +1,90 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SFHQ-InstantID Dataset Schema",
-  "description": "Schema for sfhq_dataset.csv / sfhq_dataset.parquet",
+  "description": "Schema for dataset.csv / dataset.parquet and dataset_imbalanced.csv / dataset_imbalanced.parquet",
   "type": "object",
-  "properties": {
-    "imagepath": {
-      "type": "string",
-      "description": "Release-relative path to the 128×128 face crop, e.g. images/identity_037/012.png",
-      "pattern": "^images/identity_\\d{3}/\\d{3}\\.png$"
-    },
-    "clusterid": {
-      "type": "integer",
-      "description": "Synthetic identity cluster ID",
-      "minimum": 0,
-      "maximum": 399
-    },
-    "agegroup": {
-      "type": "integer",
-      "description": "Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior",
-      "minimum": 0,
-      "maximum": 3
-    },
-    "split": {
-      "type": "string",
-      "description": "Dataset split",
-      "enum": ["retain", "test", "forget"]
-    },
-    "forgetstep": {
-      "type": "integer",
-      "description": "Unlearning step when this identity is deleted; -1 for non-forget",
-      "minimum": -1,
-      "maximum": 39
+  "definitions": {
+    "base_columns": {
+      "type": "object",
+      "properties": {
+        "image_path": {
+          "type": "string",
+          "description": "Release-relative path to the 224x224 face crop, e.g. processed/images/identity_037/accepted_012.jpg",
+          "pattern": "^(processed/)?images/identity_\\d{3}/accepted_\\d{3}\\.jpg$"
+        },
+        "identity_id": {
+          "type": "integer",
+          "description": "Synthetic identity cluster ID",
+          "minimum": 0,
+          "maximum": 599
+        },
+        "age_group": {
+          "type": "integer",
+          "description": "Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "age": {
+          "type": "integer",
+          "description": "Raw InsightFace age estimate",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "gender": {
+          "type": "integer",
+          "description": "InsightFace gender classifier output",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "split": {
+          "type": "string",
+          "description": "Dataset split",
+          "enum": ["retain", "test", "forget"]
+        },
+        "forget_step": {
+          "type": "integer",
+          "description": "Unlearning step when this identity is deleted; -1 for non-forget",
+          "minimum": -1,
+          "maximum": 14
+        },
+        "forget_variant": {
+          "type": "integer",
+          "description": "Variant index within a forget step; -1 for non-forget",
+          "minimum": -1,
+          "maximum": 99
+        },
+        "arcface_similarity": {
+          "type": "number",
+          "description": "Cosine similarity to identity's mean ArcFace embedding (confound control)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "laplacian_variance": {
+          "type": "number",
+          "description": "Sharpness score from quality filter (quality confound control)",
+          "minimum": 0.0
+        },
+        "detection_confidence": {
+          "type": "number",
+          "description": "Face detector confidence (alignment quality control)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      },
+      "required": [
+        "image_path", "identity_id", "age_group", "age", "gender",
+        "split", "forget_step", "forget_variant",
+        "arcface_similarity", "laplacian_variance", "detection_confidence"
+      ],
+      "additionalProperties": false
     }
   },
-  "required": ["imagepath", "clusterid", "agegroup", "split", "forgetstep"],
-  "additionalProperties": false
+  "allOf": [
+    { "$ref": "#/definitions/base_columns" }
+  ],
+  "notes": {
+    "balanced": "dataset.csv / dataset.parquet — exactly 75 images per identity, all base columns",
+    "imbalanced": "dataset_imbalanced.csv / dataset_imbalanced.parquet — 85:40:20 gradient, adds popularity_bin + images_per_identity",
+    "image_size": "224x224 uint8 BGR JPEG stored as accepted_XXX.jpg"
+  }
 }

@@ -9,21 +9,22 @@ upstream sources listed below under each project's own licence terms.
 
 | Component | Source | Licence | Notes |
 |---|---|---|---|
-| SFHQ | [SelfishGene/SFHQ-dataset](https://github.com/SelfishGene/SFHQ-dataset) | CC0 / Public Domain (Kaggle listing) | Synthetic portraits from StyleGAN2 + diffusion models.  Part 1 (~10k images) used. |
+| SFHQ | [SelfishGene/SFHQ-dataset](https://github.com/SelfishGene/SFHQ-dataset) | CC0 / Public Domain (Kaggle listing) | Synthetic portraits from StyleGAN2 + diffusion models.  Part 1 (~90k images) used; CLIP + KMeans diversity selection picks the 600 seeds. |
 
 ## Generative models
 
 | Component | Repository | Weights | Licence | Output-use terms |
 |---|---|---|---|---|
-| SDXL 1.0 | [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) | Hugging Face | Stability AI Open RAIL++-M | Permits output distribution with attribution; prohibits harmful use |
+| Juggernaut-XL-v9 | [RunDiffusion/Juggernaut-XL-v9](https://huggingface.co/RunDiffusion/Juggernaut-XL-v9) | Hugging Face | RunDiffusion custom (non-commercial-friendly; see model card) | Permits image generation; check model card for current terms |
 | InstantID | [InstantX/InstantID](https://github.com/InstantX/InstantID) | Hugging Face | Apache 2.0 (code) | Model weights licence may differ — check upstream |
 | ControlNet (SDXL) | [diffusers/controlnet-canny-sdxl-1.0](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0) | Hugging Face | OpenRAIL++-M | Same output-use terms as SDXL base |
+| SDXL 1.0 (Juggernaut foundation) | [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) | Hugging Face | Stability AI Open RAIL++-M | Juggernaut-XL-v9 is a fine-tune of SDXL; underlying output-use terms apply |
 
 ## Face analysis models
 
 | Component | Repository | Weights | Licence | Notes |
 |---|---|---|---|---|
-| InsightFace (ArcFace) | [deepinsight/insightface](https://github.com/deepinsight/insightface) | `buffalo_l` model pack | MIT (code); model terms vary | `w600k_r50.onnx` for ArcFace embeddings; `1k3d68.onnx`, `2d106det.onnx`, `det_10g.onnx`, `genderage.onnx` for detection and age estimation |
+| InsightFace (ArcFace) | [deepinsight/insightface](https://github.com/deepinsight/insightface) | `buffalo_l` model pack | MIT (code); model terms vary | `w600k_r50.onnx` for ArcFace embeddings; `1k3d68.onnx`, `2d106det.onnx`, `det_10g.onnx`, `genderage.onnx` for detection and age/gender estimation |
 | MTCNN | [timesler/facenet-pytorch](https://github.com/timesler/facenet-pytorch) | Bundled in package | MIT | Face detection and alignment |
 
 ## Diffusion and ML framework
@@ -34,6 +35,7 @@ upstream sources listed below under each project's own licence terms.
 | Transformers | ≥4.40 | Apache 2.0 |
 | PyTorch | 2.6.0+cu124 | BSD |
 | ONNX Runtime | GPU build | MIT |
+| CLIP (seed selection) | via `transformers` / `open_clip` | MIT |
 
 ## Notes
 
@@ -44,9 +46,10 @@ upstream sources listed below under each project's own licence terms.
   recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST.json).
 - **Upstream terms**:  Users generating their own datasets with this pipeline
   must independently verify the current licence terms of each component at the
-  time of generation, as upstream licences may change.  In particular, SDXL and
-  ControlNet output-use terms apply to any images generated with those models,
-  regardless of whether the weights are distributed.
+  time of generation, as upstream licences may change.  In particular,
+  Juggernaut-XL-v9 and SDXL/ControlNet output-use terms apply to any images
+  generated with those models, regardless of whether the weights are
+  distributed.
 
 ---
 

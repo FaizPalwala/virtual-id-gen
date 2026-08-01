@@ -229,7 +229,7 @@ bins mirrors real-world face dataset distributions.
 
 | Released ✅ | Withheld ❌ |
 |---|---|
-| Aligned 128×128 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
+| Aligned 224×224 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
 | `dataset.csv` + `.parquet` | Raw unaligned generation outputs (`candidates/`) |
 | `dataset_imbalanced.csv` + `.parquet` | ArcFace embedding vectors |
 | `datasetsummary.json` / `datasetsummary_imbalanced.json` | Seed-to-output linkage table |

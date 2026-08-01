@@ -224,3 +224,7 @@ instantid_controlnet
 models
 outputs
 repomix-output.xml
+bla
+data (to examine)
+logs
+smoke_gen

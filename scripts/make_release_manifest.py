@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Rewrite dataset CSV paths from absolute/HPC paths to release-relative paths.
 
-Reads a sfhq_dataset.csv (or identitymanifest.csv) produced by the HPC pipeline,
-rewrites every ``imagepath`` to a release-relative path of the form
-``images/identity_NNN/CCC.png``, and writes the result back.
+Reads a dataset.csv (or dataset_imbalanced.csv, or identitymanifest.csv)
+produced by the HPC pipeline, rewrites every ``image_path`` to a
+release-relative path of the form ``images/identity_NNN/accepted_XXX.jpg``,
+and writes the result back.
 
-Also validates that no stale ``/tmp/``, ``/home/``, ``/seeds/``, or seed filenames
-remain in the published metadata — exits non-zero if any are found.
+Also validates that no stale ``/tmp/``, ``/home/``, ``seeds/``, or seed
+filenames remain in the published metadata — exits non-zero if any are found.
+
+Example:
+    python scripts/make_release_manifest.py \\
+        --dataset-csv release_v1/metadata/dataset.csv \\
+        --image-root release_v1/images
 """
 from __future__ import annotations
 
@@ -23,10 +29,10 @@ def normalise_path(path_str: str) -> str:
 
     Examples
     --------
-    /scratch/kxvs0578/datagen/data/merged/processed/images/identity_037/012.png
-        → images/identity_037/012.png
-    /tmp/job.6848258/shard_0/data_shard_0/identities/candidates/identity_001/...
-        → images/identity_001/038.png   (last two segments: identity_NNN/file)
+    /scratch/kxvs0578/datagen/data/merged/processed/images/identity_037/accepted_012.jpg
+        → images/identity_037/accepted_012.jpg
+    /tmp/job.6848258/shard_0/data_shard_0/identities/candidates/identity_001/candidate_038.png
+        → images/identity_001/candidate_038.png  (raw candidates never released)
     """
     p = Path(path_str)
     parts = p.parts
@@ -51,15 +57,16 @@ FORBIDDEN_PATTERNS = [
     (r"/home/", "home directory path"),
     (r"/seeds/", "local seed image directory"),
     (r"SFHQ_pt\d_", "SFHQ seed filename"),
+    (r"^candidate_", "raw candidate filename (not release-relative)"),
     (r"^\d+\.(jpg|png)$", "bare filename (not release-relative)"),
 ]
 
 
 def validate_no_leaked_paths(df: pd.DataFrame) -> None:
-    """Raise RuntimeError if any 'imagepath' leaks internal paths."""
+    """Raise RuntimeError if any 'image_path' leaks internal paths."""
     leaked: list[tuple[str, str, str]] = []
     for _, row in df.iterrows():
-        path = row["imagepath"]
+        path = row["image_path"]
         for pattern, label in FORBIDDEN_PATTERNS:
             if re.search(pattern, path):
                 leaked.append((path, label, pattern))
@@ -82,15 +89,21 @@ def make_manifest(
     df = pd.read_csv(dataset_csv)
     original_count = len(df)
 
-    if "imagepath" not in df.columns:
-        raise KeyError(f"'imagepath' column missing. Columns: {list(df.columns)}")
+    # Accept both legacy 'imagepath' and standardised 'image_path'
+    col = "image_path" if "image_path" in df.columns else "imagepath"
+    if col not in df.columns:
+        raise KeyError(
+            f"'image_path' column missing. Columns: {list(df.columns)}"
+        )
 
-    df["imagepath"] = df["imagepath"].apply(normalise_path)
+    df["image_path"] = df[col].apply(normalise_path)
+    if col != "image_path":
+        df = df.drop(columns=[col])
 
     # Verify every normalised path exists on disk
     root = Path(image_root)
     missing: list[str] = []
-    for path in df["imagepath"]:
+    for path in df["image_path"]:
         if not (root / path).is_file():
             missing.append(path)
     if missing:
@@ -113,7 +126,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset-csv",
         required=True,
-        help="Path to sfhq_dataset.csv (read and overwritten)",
+        help="Path to dataset.csv / dataset_imbalanced.csv (read and overwritten)",
     )
     parser.add_argument(
         "--image-root",

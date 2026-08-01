@@ -2,33 +2,44 @@
   "dataset": "SFHQ-InstantID",
   "version": "1.0.0",
   "release_date": "TODO",
-  "image_count": 16000,
-  "identity_count": 400,
-  "resolution": [128, 128],
-  "color_mode": "RGB",
-  "format": "PNG",
+  "image_count_balanced": 45000,
+  "image_count_imbalanced": "~19500",
+  "identity_count": 600,
+  "resolution": [224, 224],
+  "color_mode": "BGR",
+  "format": "JPEG",
   "splits": {
-    "retain": {"identities": 300, "images": 12000},
-    "test": {"identities": 60, "images": 2400},
-    "forget": {"identities": 40, "images": 1600, "steps": 40}
+    "retain": {"identities": 450, "images_balanced": 33750},
+    "test": {"identities": 90, "images_balanced": 6750},
+    "forget": {"identities": 60, "images_balanced": 4500, "steps": 15}
+  },
+  "imbalanced_gradient": {
+    "design": "85:40:20 (4.25:2:1) down-sampled popularity gradient",
+    "high": {"identities": 60, "images_per_id": 85},
+    "medium": {"identities": 180, "images_per_id": 40},
+    "low": {"identities": 360, "images_per_id": 20}
   },
   "random_seed": 42,
-  "shard_seeds": [42, 44, 46, 48],
+  "shard_seeds": [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64],
+  "shard_count": 12,
+  "identities_per_shard": 50,
   "git_commit": "TODO",
   "generation_config": {
-    "base_model": "stabilityai/stable-diffusion-xl-base-1.0",
-    "num_inference_steps": 25,
-    "guidance_scale": 5.5,
-    "ip_adapter_scale": 0.90,
+    "base_model": "RunDiffusion/Juggernaut-XL-v9",
+    "num_inference_steps": 30,
+    "guidance_scale": 3.0,
+    "ip_adapter_scale": 0.85,
     "controlnet_conditioning_scale": 0.80,
     "generation_resolution": [1024, 1024],
-    "crop_resolution": [128, 128],
-    "candidates_per_identity": 70,
-    "images_per_identity": 40,
+    "crop_resolution": [224, 224],
+    "candidates_per_identity": 85,
+    "images_per_identity_balanced": 75,
     "min_similarity_raw": 0.40,
     "min_similarity_final": 0.45,
     "blur_threshold": 80.0,
-    "mtcnn_confidence_threshold": 0.85
+    "mtcnn_confidence_threshold": 0.85,
+    "prompt_pool_size": 100,
+    "prompts_per_identity": 85
   },
   "package_versions": {
     "python": "3.10",
@@ -43,8 +54,8 @@
     "pandas": "TODO"
   },
   "model_revisions": {
-    "sdxl": {
-      "repo": "stabilityai/stable-diffusion-xl-base-1.0",
+    "juggernaut_xl_v9": {
+      "repo": "RunDiffusion/Juggernaut-XL-v9",
       "revision": "TODO",
       "download_date": "TODO"
     },
@@ -69,7 +80,8 @@
     "url": "https://github.com/SelfishGene/SFHQ-dataset",
     "kaggle_listing_licence": "CC0 / Public Domain",
     "part": 1,
-    "image_count": "TODO",
+    "image_count": "~90000",
+    "seed_selection": "CLIP features + KMeans diversity selection",
     "download_date": "TODO"
   },
   "checksums": "metadata/checksums.sha256"
