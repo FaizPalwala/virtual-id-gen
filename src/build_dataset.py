@@ -26,13 +26,15 @@ OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
     "split", "forget_step", "forget_variant",
     "arcface_similarity", "laplacian_variance", "detection_confidence",
+    "pose", "expression", "lighting", "setting", "camera",
+    "raw_arcface_similarity",
 ]
 
 
 def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
     """Load image-level attributes saved by extract_embeddings.py."""
     embeddings = Path(embeddingsdir)
-    return pd.DataFrame(
+    df = pd.DataFrame(
         {
             "imagepath": np.load(embeddings / "imagepaths.npy").astype(str),
             "agegroup": np.load(embeddings / "agegroups.npy"),
@@ -41,6 +43,10 @@ def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
             "embedding": list(np.load(embeddings / "embeddings.npy")),
         }
     )
+    id_path = embeddings / "identity_ids.npy"
+    if id_path.exists():
+        df["identity_id"] = np.load(id_path)
+    return df
 
 
 def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
@@ -60,6 +66,31 @@ def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
         for row in final.itertuples(index=False)
     ]
     return final
+
+
+def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
+    """Load per-candidate metadata from the generate step's manifest.
+
+    Returns a DataFrame indexed by ``identity_id`` with a single row per
+    identity (the metadata is identical for all candidates of an identity,
+    since it describes the generation prompt attributes).
+    """
+    raw = Path(identitydir) / "identities" / "raw_candidate_manifest.csv"
+    if not raw.exists():
+        raw = Path(identitydir).parent / "identities" / "raw_candidate_manifest.csv"
+    df = pd.read_csv(raw)
+    # The raw manifest may still use 'clusterid' if merged by an older script.
+    id_col = "identity_id" if "identity_id" in df.columns else "clusterid"
+    metadata_cols = [
+        "pose", "expression", "lighting", "setting", "camera",
+        "raw_arcface_similarity",
+    ]
+    available = [c for c in metadata_cols if c in df.columns]
+    if not available:
+        # Older manifests without metadata columns — return empty.
+        return pd.DataFrame(index=pd.Index([], name="identity_id"))
+    return df[[id_col] + available].rename(columns={id_col: "identity_id"})\
+        .drop_duplicates("identity_id").set_index("identity_id")[available]
 
 
 def _distribute_forget(
@@ -96,20 +127,29 @@ def build_dataset(
     """Merge final manifest and attributes, trim to imagesperidentity per cluster."""
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
+
+    # Demographics are per-identity (from 1024 extraction); take the first.
+    identity_demog = attributes.groupby("identity_id").first()[
+        ["agegroup", "age", "gender", "embedding"]
+    ].reset_index()
+
     final = manifest[["imagepath", "identity_id", "detection_confidence", "laplacian_variance"]].merge(
-        attributes, on="imagepath", how="inner", validate="one_to_one"
+        identity_demog, on="identity_id", how="left", validate="many_to_one"
     )
     if len(final) != len(manifest):
-        print(f"Manifest: {len(manifest)} rows, final: {len(final)} rows")
-        print(f"  Manifest sample: {manifest['imagepath'].iloc[0]}")
-        print(f"  Attributes sample: {attributes['imagepath'].iloc[0]}")
-        only_manifest = set(manifest["imagepath"]) - set(attributes["imagepath"])
-        only_attrs = set(attributes["imagepath"]) - set(manifest["imagepath"])
-        if only_manifest:
-            print(f"  In manifest only ({len(only_manifest)}): {sorted(only_manifest)[:3]}")
-        if only_attrs:
-            print(f"  In attributes only ({len(only_attrs)}): {sorted(only_attrs)[:3]}")
-        raise RuntimeError("Attribute extraction is missing final images.")
+        # Should not happen with identity-level merge, but guard for safety.
+        raise RuntimeError(
+            f"Demographic join lost rows: {len(manifest)} → {len(final)}"
+        )
+
+    # Join generation metadata (pose, expression, lighting, ...) from the
+    # raw candidate manifest.  Metadata is per-identity (same prompt grid for
+    # all candidates), so the join is identity-level.
+    metadata = _load_candidate_metadata(identitydir)
+    if not metadata.empty:
+        final = final.merge(
+            metadata, on="identity_id", how="left", validate="many_to_one"
+        )
 
     # Per-image cosine similarity to the identity's mean embedding.
     # Computed BEFORE trimming so the reference mean spans ALL quality-passing
@@ -257,7 +297,12 @@ def build_dataset(
             "forgetstep": "forget_step",
             "forgetvariant": "forget_variant",
         }
-    )[OUTPUT_COLUMNS]
+    )
+    # Fill missing metadata columns with defaults for older manifests.
+    for col in OUTPUT_COLUMNS:
+        if col not in output_df.columns:
+            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+    output_df = output_df[OUTPUT_COLUMNS]
     output_df["image_path"] = (
         output_df["image_path"]
         .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
@@ -330,11 +375,24 @@ def build_imbalanced_dataset(
     # ── 1. Read and merge manifests (same as build_dataset) ──
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
+
+    identity_demog = attributes.groupby("identity_id").first()[
+        ["agegroup", "age", "gender", "embedding"]
+    ].reset_index()
+
     final = manifest[["imagepath", "identity_id", "detection_confidence", "laplacian_variance"]].merge(
-        attributes, on="imagepath", how="inner", validate="one_to_one"
+        identity_demog, on="identity_id", how="left", validate="many_to_one"
     )
     if len(final) != len(manifest):
-        raise RuntimeError("Attribute extraction is missing final images.")
+        raise RuntimeError(
+            f"Demographic join lost rows: {len(manifest)} -> {len(final)}"
+        )
+
+    metadata = _load_candidate_metadata(identitydir)
+    if not metadata.empty:
+        final = final.merge(
+            metadata, on="identity_id", how="left", validate="many_to_one"
+        )
 
     # Per-image cosine similarity to the identity's mean embedding.
     # Computed BEFORE pruning so the reference mean spans ALL quality-passing
@@ -465,7 +523,11 @@ def build_imbalanced_dataset(
             "forgetstep": "forget_step",
             "forgetvariant": "forget_variant",
         }
-    )[output_columns]
+    )
+    for col in OUTPUT_COLUMNS:
+        if col not in output_df.columns:
+            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+    output_df = output_df[output_columns]
     output_df["image_path"] = (
         output_df["image_path"]
         .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
@@ -479,7 +541,7 @@ def build_imbalanced_dataset(
     # Summary with per-bin breakdown.
     bin_stats = imbalanced.groupby("popularity_bin").agg(
         nidentities=("identity_id", "nunique"),
-        nimages=("image_path", "count"),
+        nimages=("imagepath", "count"),
     ).to_dict("index")
 
     (output / "datasetsummary_imbalanced.json").write_text(
