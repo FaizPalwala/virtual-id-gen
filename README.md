@@ -17,16 +17,17 @@ deletion schedules.
 |---|---|
 | **Source domain** | SFHQ (CC0 synthetic portraits) |
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
-| **Output resolution** | 224×224 RGB (aligned face crops) |
+| **Output resolution** | 224×224 (aligned face crops) / 1024×1024 (candidates) |
 | **Identities** | 600 |
-| **Images per identity** | 75 (balanced, trimmed at build) / 85:40:20 gradient (imbalanced) |
-| **Total images** | 45,000 (balanced) / ~19,500 (imbalanced) |
+| **Images per identity** | 75 (balanced) / 85 (candidates) / 85:40:20 gradient (imbalanced) |
+| **Total images** | 45,000 (224 balanced) / ~19,500 (224 imbalanced) / 51,000 (1024 candidates) / ~TBD (1024 imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
-| **Labels (balanced)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant` |
+| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 6 metadata columns |
 | **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
+| **Artifacts** | 4 dataset pairs: 224 balanced, 224 imbalanced, 1024 candidates, 1024 candidates-imbalanced |
 
 ## Why this dataset?
 
@@ -59,11 +60,13 @@ flowchart TD
     A[SFHQ source images<br/>CC0 synthetic, ~90k] --> B[CLIP + KMeans<br/>diverse seed selection]
     B --> C[InstantID + Juggernaut-XL-v9<br/>identity-conditioned generation]
     C --> D[Merge 12-GPU shards]
-    D --> E[MTCNN alignment<br/>sharpness + ArcFace gating]
-    E --> F[ArcFace embedding extraction<br/>proxy age-group labels]
-    F --> G[Identity-level splits<br/>retain / test / forget assignment]
-    G --> H[dataset.csv + parquet<br/>release artifact]
-    G --> I[dataset_imbalanced.csv<br/>75:50:25 gradient]
+    D --> E[ArcFace extraction on<br/>1024x1024 candidates]
+    E --> F[MTCNN alignment<br/>sharpness + ArcFace gating]
+    F --> G[Identity-level splits<br/>retain / test / forget]
+    G --> H[dataset.csv + parquet<br/>224x224 release artifact]
+    G --> I[dataset_imbalanced.csv<br/>224x224 85:40:20 gradient]
+    E --> J[dataset_candidates.csv<br/>1024x1024 release artifact]
+    J --> K[dataset_candidates_imbalanced<br/>1024x1024 85:40:20]
 ```
 
 ### Phase breakdown
@@ -72,15 +75,15 @@ flowchart TD
 |---|---|---|---|---|
 | 1. Download | `step1_download` | 1 CPU | ~5 min | Precomputed CLIP features + KMeans seed selection from SFHQ |
 | 2. Generate | `hpc_generate.sh` | 12× L40S GPU (exclusive) | ~12 hr | 600 identities (50/shard), 85 candidates each, 100 unique prompts |
-| 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap cluster IDs |
-| 4. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, ArcFace similarity gate, sharpness filter — saves all quality-passing crops |
-| 5. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings, proxy age-group labels |
-| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | Trims to imagesperidentity (balanced) + imbalanced gradient dataset |
+| 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap identity IDs |
+| 4. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings + demographics on 1024×1024 candidates (detection works on full portraits) |
+| 5. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, sharpness + ArcFace gating → 224×224 crops |
+| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | All four artifacts: 224 balanced/imbalanced + 1024 balanced/imbalanced |
 
-Preprocess saves every crop that passes quality gates (up to ~85 per identity).
-The build step owns all cardinality decisions — trimming to 75 for the balanced
-dataset and applying the 85:40:20 gradient for the imbalanced variant.  This
-separation lets you modify the gradient without re-running quality checks.
+Extract now runs **before** preprocess on the 1024×1024 raw candidates to fix
+the demographics bug (InsightFace detection fails on tight 224 crops but works
+on full-resolution portraits).  The build step produces four dataset pairs from
+a single pipeline run.
 
 ### Configuration
 
@@ -202,6 +205,54 @@ identity's images are split across retain/test/forget.  This is enforced by
 `validate_release.py` and must hold for any machine-unlearning evaluation to be
 valid.
 
+### `dataset_candidates.csv` / `dataset_candidates.parquet`
+
+Full-resolution 1024×1024 candidate dataset — the raw generation outputs
+before face alignment.  All 85 candidates per identity, no quality trim.
+Designed as a general-purpose release for identity recognition, face
+generation evaluation, demographic bias studies, and erasure-transfer
+testing (does forgetting the 224 crop also hide identity in the full
+context?).
+
+| Column | Type | Description |
+|---|---|---|
+| `image_path` | string | Relative path: `identities/candidates/identity_NNN/candidate_YYY.png` |
+| `identity_id` | int (0–599) | Synthetic identity cluster ID |
+| `age_group` | int (0–3) | Proxy age label |
+| `age` | int | Raw InsightFace age estimate |
+| `gender` | int (0/1) | InsightFace gender classifier |
+| `split` | string | `retain`, `test`, or `forget` |
+| `forget_step` | int | Unlearning step |
+| `forget_variant` | int | Variant index within a step |
+| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean candidate embedding |
+| `pose` | string | Head/body position |
+| `expression` | string | Facial expression |
+| `lighting` | string | Lighting condition |
+| `setting` | string | Background/scene |
+| `camera` | string | Camera angle |
+| `raw_arcface_similarity` | float | Full-res candidate's cosine similarity to the source identity seed |
+
+No `laplacian_variance` or `detection_confidence` — these are crop-level
+quality metrics and are meaningless on raw candidates.
+
+An imbalanced variant (`dataset_candidates_imbalanced.csv/.parquet`) applies
+the same 85:40:20 gradient, adding `popularity_bin` and `images_per_identity`
+columns.
+
+### Release summary (all artifacts)
+
+| Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
+|---|---|---|---|---|---|
+| `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation benchmark |
+| `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | 85:40:20 | ~19,500 | Long-tail stress test |
+| `dataset_candidates.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
+| `dataset_candidates_imbalanced.csv/.parquet` | 1024×1024 candidates | 600 | 85:40:20 | ~TBD | Full-res long-tail stress test |
+
+All four share identical `identity_id`, `split`, `forget_step`, and
+`forget_variant` labels.  Demographics (age, gender) are derived from
+detection on 1024×1024 candidates and are now real — no longer degenerate
+from the CPU fallback path.
+
 ### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
@@ -230,12 +281,16 @@ bins mirrors real-world face dataset distributions.
 | Released ✅ | Withheld ❌ |
 |---|---|
 | Aligned 224×224 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
-| `dataset.csv` + `.parquet` | Raw unaligned generation outputs (`candidates/`) |
-| `dataset_imbalanced.csv` + `.parquet` | ArcFace embedding vectors |
-| `datasetsummary.json` / `datasetsummary_imbalanced.json` | Seed-to-output linkage table |
-| Checksums (`checksums.sha256`) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
-| Schema (`schema.json`) | Rejected / low-quality candidates |
-| Release manifest (`RELEASE_MANIFEST.json`) | Logs, conda envs, model caches |
+| 1024×1024 candidate images (`candidates/`) | ArcFace embedding vectors |
+| `dataset.csv` + `.parquet` (224 balanced) | Seed-to-output linkage table |
+| `dataset_imbalanced.csv` + `.parquet` (224) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
+| `dataset_candidates.csv` + `.parquet` (1024) | Rejected / low-quality candidate images |
+| `dataset_candidates_imbalanced.csv` + `.parquet` | Logs, conda envs, model caches |
+| `datasetsummary*.json` (all variants) | |
+| `datasetsummary_candidates*.json` | |
+| Checksums (`checksums.sha256`) | |
+| Schema (`schema.json`) | |
+| Release manifest (`RELEASE_MANIFEST.json`) | |
 
 Model weights must be obtained from upstream sources by each user under the
 upstream licence terms.  See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
