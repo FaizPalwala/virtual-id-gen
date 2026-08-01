@@ -16,7 +16,7 @@
 # CPU job that exits after the last child is submitted.
 #
 #     ┌─────────────┐
-#     │  generate    │  4-GPU array  (hpc_generate.sh)
+#     │  generate    │  12-GPU array (hpc_generate.sh)
 #     └──────┬──────┘
 #            │ afterok
 #     ┌──────▼──────┐
@@ -24,16 +24,20 @@
 #     └──────┬──────┘
 #            │ afterok
 #     ┌──────▼──────┐
-#     │ preprocess   │  1 GPU        (hpc_preprocess.sh)
+#     │  extract     │  1 GPU        (hpc_extract.sh)  — ArcFace on 1024 candidates
 #     └──────┬──────┘
 #            │ afterok
 #     ┌──────▼──────┐
-#     │  extract     │  1 GPU        (hpc_extract.sh)
+#     │ preprocess   │  1 GPU        (hpc_preprocess.sh) — 224 crops
 #     └──────┬──────┘
 #            │ afterok
 #     ┌──────▼──────┐
-#     │   build      │  1 CPU        (hpc_build.sh)
+#     │   build      │  1 CPU        (hpc_build.sh)   — all four dataset pairs
 #     └─────────────┘
+#
+# Extract runs BEFORE preprocess: demographics/embeddings come from the
+# 1024×1024 candidates (InsightFace detection fails on tight 224 crops),
+# and the 224 crops inherit them via identity join at build time.
 #
 # Each job writes its own log under logs/.
 # If any phase fails, downstream jobs are cancelled by Slurm.
@@ -66,28 +70,31 @@ MERGE_JOB=$(submit_job "merge" "$SCRIPT_DIR/hpc_merge.sh" \
     --dependency="afterok:${GEN_JOB}")
 echo ""
 
-# ---- Phase 3: Preprocess (GPU, depends on merge) ----
-PRE_JOB=$(submit_job "preprocess" "$SCRIPT_DIR/hpc_preprocess.sh" \
+# ---- Phase 3: Extract (GPU, depends on merge) ----
+# ArcFace embeddings + demographics on the 1024x1024 candidates.
+EXT_JOB=$(submit_job "extract" "$SCRIPT_DIR/hpc_extract.sh" \
     --dependency="afterok:${MERGE_JOB}")
 echo ""
 
-# ---- Phase 4: Extract (GPU, depends on preprocess) ----
-EXT_JOB=$(submit_job "extract" "$SCRIPT_DIR/hpc_extract.sh" \
-    --dependency="afterok:${PRE_JOB}")
+# ---- Phase 4: Preprocess (GPU, depends on extract) ----
+# MTCNN align + quality gate on the candidates -> 224x224 crops.
+PRE_JOB=$(submit_job "preprocess" "$SCRIPT_DIR/hpc_preprocess.sh" \
+    --dependency="afterok:${EXT_JOB}")
 echo ""
 
-# ---- Phase 5: Build (CPU, depends on extract) ----
+# ---- Phase 5: Build (CPU, depends on preprocess) ----
+# Assembles all four dataset pairs (Bench + Full, balanced + imbalanced).
 BLD_JOB=$(submit_job "build" "$SCRIPT_DIR/hpc_build.sh" \
-    --dependency="afterok:${EXT_JOB}")
+    --dependency="afterok:${PRE_JOB}")
 echo ""
 
 echo "=============================================="
 echo "Pipeline submitted.  Summary:"
 echo "  generate    : $GEN_JOB"
 echo "  merge       : $MERGE_JOB  (after $GEN_JOB)"
-echo "  preprocess  : $PRE_JOB    (after $MERGE_JOB)"
-echo "  extract     : $EXT_JOB    (after $PRE_JOB)"
-echo "  build       : $BLD_JOB    (after $EXT_JOB)"
+echo "  extract     : $EXT_JOB    (after $MERGE_JOB)"
+echo "  preprocess  : $PRE_JOB    (after $EXT_JOB)"
+echo "  build       : $BLD_JOB    (after $PRE_JOB)"
 echo ""
 echo "Monitor with:  squeue -u \$USER"
 echo "=============================================="
