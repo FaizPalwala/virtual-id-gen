@@ -23,7 +23,7 @@ deletion schedules.
 | **Total images** | 45,000 (balanced) / ~19,500 (imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
-| **Labels (balanced)** | `clusterid`, `age_group`, `split`, `forget_step`, `forget_variant` |
+| **Labels (balanced)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant` |
 | **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
@@ -41,7 +41,7 @@ InstantID solves both problems:
   not claim the images are "anonymous" or "privacy-safe"; synthetic does not
   mean risk-free, and residual likeness or memorisation is possible.
 - **Identity clusters are deletion units.**  All 75 images of identity 37 share
-  the same `clusterid`, the same `split`, and (if in `forget`) the same
+  the same `identity_id`, the same `split`, and (if in `forget`) the same
   `forget_step`.  An unlearning system must genuinely erase a *person* rather
   than scattered pixels.
 - **Sequential forget protocol.**  60 identity clusters are deleted over 15
@@ -180,7 +180,7 @@ for all tunables.
 | Column | Type | Description |
 |---|---|---|
 | `image_path` | string | Relative path: `processed/images/identity_NNN/accepted_XXX.jpg` |
-| `clusterid` | int (0–599) | Synthetic identity cluster ID |
+| `identity_id` | int (0–599) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior |
 | `age` | int | Raw InsightFace age estimate |
 | `gender` | int (0/1) | InsightFace gender classifier output |
@@ -197,7 +197,7 @@ normalise with ImageNet statistics — `CROP_SIZE`, `IMAGENET_MEAN`,
 `IMAGENET_STD` are exported from `src/common.py`.  This matches the ImageNet
 training regime so pretrained features activate at full fidelity from epoch 1.
 
-**Critical invariant:** Every `clusterid` maps to exactly one `split`.  No
+**Critical invariant:** Every `identity_id` maps to exactly one `split`.  No
 identity's images are split across retain/test/forget.  This is enforced by
 `validate_release.py` and must hold for any machine-unlearning evaluation to be
 valid.
