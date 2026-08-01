@@ -410,7 +410,7 @@ def build_imbalanced_dataset(
 
     # ── 2. Assign popularity bins ──
     # Design choice: seeded random shuffle ensures reproducibility and avoids
-    # any correlation with the identity's original cluster ID (which may be
+    # any correlation with the identity's original identity ID (which may be
     # correlated with seed quality or prompt order).  Bin boundaries are
     # based on identity count, not image count.
     rng = np.random.RandomState(randomstate + 9999)  # different seed from balanced
