@@ -1,90 +1,103 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "SFHQ-InstantID Dataset Schema",
-  "description": "Schema for dataset.csv / dataset.parquet and dataset_imbalanced.csv / dataset_imbalanced.parquet",
+  "title": "SFHQ-VirtualID Dataset Schemas",
+  "description": "Schemas for the SFHQ-VirtualID releases: Bench (224x224 aligned crops) and Full (1024x1024 candidates), each with balanced + imbalanced variants.",
   "type": "object",
   "definitions": {
-    "base_columns": {
+    "bench_balanced": {
       "type": "object",
+      "description": "dataset.csv / dataset.parquet — SFHQ-VirtualID-Bench balanced (224x224 crops)",
       "properties": {
         "image_path": {
           "type": "string",
           "description": "Release-relative path to the 224x224 face crop, e.g. processed/images/identity_037/accepted_012.jpg",
           "pattern": "^(processed/)?images/identity_\\d{3}/accepted_\\d{3}\\.jpg$"
         },
-        "identity_id": {
-          "type": "integer",
-          "description": "Synthetic identity cluster ID",
-          "minimum": 0,
-          "maximum": 599
-        },
-        "age_group": {
-          "type": "integer",
-          "description": "Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior",
-          "minimum": 0,
-          "maximum": 3
-        },
-        "age": {
-          "type": "integer",
-          "description": "Raw InsightFace age estimate",
-          "minimum": 0,
-          "maximum": 120
-        },
-        "gender": {
-          "type": "integer",
-          "description": "InsightFace gender classifier output",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "split": {
-          "type": "string",
-          "description": "Dataset split",
-          "enum": ["retain", "test", "forget"]
-        },
-        "forget_step": {
-          "type": "integer",
-          "description": "Unlearning step when this identity is deleted; -1 for non-forget",
-          "minimum": -1,
-          "maximum": 14
-        },
-        "forget_variant": {
-          "type": "integer",
-          "description": "Variant index within a forget step; -1 for non-forget",
-          "minimum": -1,
-          "maximum": 99
-        },
-        "arcface_similarity": {
-          "type": "number",
-          "description": "Cosine similarity to identity's mean ArcFace embedding (confound control)",
-          "minimum": 0.0,
-          "maximum": 1.0
-        },
-        "laplacian_variance": {
-          "type": "number",
-          "description": "Sharpness score from quality filter (quality confound control)",
-          "minimum": 0.0
-        },
-        "detection_confidence": {
-          "type": "number",
-          "description": "Face detector confidence (alignment quality control)",
-          "minimum": 0.0,
-          "maximum": 1.0
-        }
+        "identity_id": {"type": "integer", "minimum": 0, "maximum": 599},
+        "age_group": {"type": "integer", "minimum": 0, "maximum": 3},
+        "age": {"type": "integer", "minimum": 0, "maximum": 120},
+        "gender": {"type": "integer", "minimum": 0, "maximum": 1},
+        "split": {"type": "string", "enum": ["retain", "test", "forget"]},
+        "forget_step": {"type": "integer", "minimum": -1, "maximum": 14},
+        "forget_variant": {"type": "integer", "minimum": -1, "maximum": 99},
+        "arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "laplacian_variance": {"type": "number", "minimum": 0.0},
+        "detection_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "pose": {"type": "string"},
+        "expression": {"type": "string"},
+        "lighting": {"type": "string"},
+        "setting": {"type": "string"},
+        "camera": {"type": "string"},
+        "raw_arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
       },
       "required": [
         "image_path", "identity_id", "age_group", "age", "gender",
         "split", "forget_step", "forget_variant",
-        "arcface_similarity", "laplacian_variance", "detection_confidence"
+        "arcface_similarity", "laplacian_variance", "detection_confidence",
+        "pose", "expression", "lighting", "setting", "camera",
+        "raw_arcface_similarity"
       ],
       "additionalProperties": false
+    },
+    "bench_imbalanced": {
+      "type": "object",
+      "description": "dataset_imbalanced.csv / .parquet — SFHQ-VirtualID-Bench imbalanced (85:40:20 gradient)",
+      "allOf": [{"$ref": "#/definitions/bench_balanced"}],
+      "properties": {
+        "popularity_bin": {"type": "string", "enum": ["high", "medium", "low"]},
+        "images_per_identity": {"type": "integer", "minimum": 1}
+      },
+      "required": ["popularity_bin", "images_per_identity"]
+    },
+    "full_balanced": {
+      "type": "object",
+      "description": "dataset_candidates.csv / .parquet — SFHQ-VirtualID-Full balanced (1024x1024 candidates)",
+      "properties": {
+        "image_path": {
+          "type": "string",
+          "description": "Release-relative path to the 1024x1024 candidate, e.g. identities/candidates/identity_037/candidate_012.png",
+          "pattern": "^(identities/)?candidates/identity_\\d{3}/candidate_\\d{3}\\.png$"
+        },
+        "identity_id": {"type": "integer", "minimum": 0, "maximum": 599},
+        "age_group": {"type": "integer", "minimum": 0, "maximum": 3},
+        "age": {"type": "integer", "minimum": 0, "maximum": 120},
+        "gender": {"type": "integer", "minimum": 0, "maximum": 1},
+        "split": {"type": "string", "enum": ["retain", "test", "forget"]},
+        "forget_step": {"type": "integer", "minimum": -1, "maximum": 14},
+        "forget_variant": {"type": "integer", "minimum": -1, "maximum": 99},
+        "arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "pose": {"type": "string"},
+        "expression": {"type": "string"},
+        "lighting": {"type": "string"},
+        "setting": {"type": "string"},
+        "camera": {"type": "string"},
+        "raw_arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+      },
+      "required": [
+        "image_path", "identity_id", "age_group", "age", "gender",
+        "split", "forget_step", "forget_variant", "arcface_similarity",
+        "pose", "expression", "lighting", "setting", "camera",
+        "raw_arcface_similarity"
+      ],
+      "additionalProperties": false
+    },
+    "full_imbalanced": {
+      "type": "object",
+      "description": "dataset_candidates_imbalanced.csv / .parquet — SFHQ-VirtualID-Full imbalanced",
+      "allOf": [{"$ref": "#/definitions/full_balanced"}],
+      "properties": {
+        "popularity_bin": {"type": "string", "enum": ["high", "medium", "low"]},
+        "images_per_identity": {"type": "integer", "minimum": 1}
+      },
+      "required": ["popularity_bin", "images_per_identity"]
     }
   },
-  "allOf": [
-    { "$ref": "#/definitions/base_columns" }
-  ],
   "notes": {
-    "balanced": "dataset.csv / dataset.parquet — exactly 75 images per identity, all base columns",
-    "imbalanced": "dataset_imbalanced.csv / dataset_imbalanced.parquet — 85:40:20 gradient, adds popularity_bin + images_per_identity",
-    "image_size": "224x224 uint8 BGR JPEG stored as accepted_XXX.jpg"
+    "image_size": {
+      "bench": "224x224 uint8 BGR JPEG (accepted_XXX.jpg)",
+      "full": "1024x1024 PNG (candidate_YYY.png)"
+    },
+    "shared_invariant": "Every identity_id maps to exactly one split across ALL four artifacts.",
+    "pruning": "Release ships only images referenced by at least one CSV in the release (union of balanced + imbalanced); orphans on disk are excluded."
   }
 }
