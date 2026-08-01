@@ -12,6 +12,7 @@ Example:
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import matplotlib
@@ -315,17 +316,19 @@ def build_dataset(
         json.dumps(
             {
                 "total_images": len(final),
-                "nclusters": len(identities),
+                "nidentities": len(identities),
+                "images_per_identity": imagesperidentity,
                 "nforget_ids": nforget,
                 "forget_steps": forget_steps,
-                "distribution": {
-                    "base_per_step": nforget // forget_steps,
-                    "remainder_steps": nforget % forget_steps,
-                },
+                "forget_pct": nforget / len(identities),
+                "distribution": {str(s): cnt for s, cnt in sorted(
+                    Counter(step_map[cid][0] for cid in step_map).items()
+                )},
                 "split_sizes": {
                     key: int(value)
                     for key, value in final.groupby("split").size().items()
                 },
+                "columns": OUTPUT_COLUMNS,
             },
             indent=2,
         )
@@ -548,7 +551,8 @@ def build_imbalanced_dataset(
         json.dumps(
             {
                 "total_images": len(imbalanced),
-                "nclusters": len(imbalanced_ids),
+                "nidentities": len(imbalanced_ids),
+                "forget_pct": nforget / len(imbalanced_ids),
                 "design": (
                     "Down-sampled to a 4.25:2:1 gradient: high up to 85 "
                     f"images, medium {medium_bin_images} images, "
@@ -580,6 +584,7 @@ def build_imbalanced_dataset(
                     key: int(value)
                     for key, value in imbalanced.groupby("split").size().items()
                 },
+                "columns": OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"],
             },
             indent=2,
         )
@@ -701,10 +706,12 @@ def build_candidates_dataset(
     (output / "datasetsummary_candidates.json").write_text(
         json.dumps({
             "total_images": len(final),
-            "nclusters": len(identities),
+            "nidentities": len(identities),
             "nforget_ids": nforget,
             "forget_steps": forget_steps,
+            "forget_pct": nforget / len(identities),
             "split_sizes": {k: int(v) for k, v in final.groupby("split").size().items()},
+            "columns": CANDIDATE_OUTPUT_COLUMNS,
         }, indent=2)
     )
 
@@ -801,6 +808,25 @@ def build_candidates_imbalanced(
     parquet_path = output / "dataset_candidates_imbalanced.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
+
+    bin_stats = imbalanced.groupby("popularity_bin").agg(
+        nidentities=("identity_id", "nunique"),
+        nimages=("imagepath", "count"),
+    ).to_dict("index")
+
+    (output / "datasetsummary_candidates_imbalanced.json").write_text(
+        json.dumps({
+            "total_images": len(imbalanced),
+            "nidentities": len(identities),
+            "forget_pct": nforget / len(identities),
+            "images_per_bin": {"high": 85, "medium": medium_bin_images, "low": low_bin_images},
+            "bin_sizes": {"high_pct": high_bin_pct, "low_pct": low_bin_pct,
+                          "n_high": n_high, "n_medium": n_medium, "n_low": n_low},
+            "per_bin": {bin: {"identities": s["nidentities"], "images": s["nimages"]}
+                        for bin, s in bin_stats.items()},
+            "columns": CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"],
+        }, indent=2)
+    )
 
     print(f"[OK] Candidates imbalanced: {len(imbalanced)} images across "
           f"{len(identities)} identities — "
