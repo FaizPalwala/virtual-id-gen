@@ -46,7 +46,7 @@ mkdir -p "$MERGED_DIR"
 
 python "$REPO_DIR/scripts/merge_shards.py" \
     --outputdir "$SHARD_ROOT" \
-    --mergeddir "$MERGED_DIR" \
+    --identitiesdir "$MERGED_DIR" \
     --seedsdir "$DATA_DIR/seeds" \
     --shardcount "$SHARD_COUNT" \
     --identitiespershard "$IDENTITIES_PER_SHARD"

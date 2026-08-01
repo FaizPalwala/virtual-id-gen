@@ -5,18 +5,18 @@ Reads shard_N/ directories (each a copy of a generate step's identities/ output)
 remaps identity/cluster IDs to be globally unique, copies candidate images into
 a unified candidates/ tree, and writes a single merged manifest + skipped-seed log.
 
-The merged output is written directly into *mergeddir*:
-    mergeddir/raw_candidate_manifest.csv
-    mergeddir/candidates/identity_XXX/candidate_YYY.png
-    mergeddir/skipped_seed_manifest.csv
+The merged output is written directly into *identitiesdir*:
+    identitiesdir/raw_candidate_manifest.csv
+    identitiesdir/candidates/identity_XXX/candidate_YYY.png
+    identitiesdir/skipped_seed_manifest.csv
 
-After the merge, point Hydra's ``dataset.dataroot`` to the *parent* of mergeddir
-so that ``identities/`` resolves to mergeddir — e.g. if mergeddir is
-``/data/merged/identities``, set ``dataset.dataroot=/data/merged``.
+After the merge, point Hydra's ``dataset.dataroot`` to the *parent* of
+identitiesdir so that ``identities/`` resolves to it — e.g. if identitiesdir
+is ``/data/identities``, set ``dataset.dataroot=/data``.
 
 Usage:
-    python scripts/merge_shards.py --outputdir identities/ \\
-                                   --mergeddir identities/final/
+    python scripts/merge_shards.py --outputdir shards/ \\
+                                   --identitiesdir identities/
 """
 from __future__ import annotations
 
@@ -29,13 +29,13 @@ import pandas as pd
 
 def merge_shards(
     outputdir: str,
-    mergeddir: str,
+    identitiesdir: str,
     seedsdir: str = "",
     shard_count: int = 4,
     identities_per_shard: int = 100,
 ) -> str:
     root = Path(outputdir)
-    merged = Path(mergeddir)
+    merged = Path(identitiesdir)
     merged.mkdir(parents=True, exist_ok=True)
 
     merged_candidates = merged / "candidates"
@@ -125,7 +125,7 @@ if __name__ == "__main__":
         "--outputdir", required=True, help="Root directory containing shard_*/ subdirs"
     )
     p.add_argument(
-        "--mergeddir", required=True, help="Where to write the unified identities/ output"
+        "--identitiesdir", required=True, help="Where to write the unified identities/ output"
     )
     p.add_argument("--shardcount", type=int, default=4, dest="shard_count")
     p.add_argument(
