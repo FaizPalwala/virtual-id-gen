@@ -1,7 +1,9 @@
-# SFHQ-InstantID: A Synthetic Identity-Conditioned Face Dataset for Machine Unlearning
+# SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
 
-[![Dataset on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-blue)](https://huggingface.co/datasets/TODO)
-[![DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
+[![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/TODO)
+[![Full on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Full-blue)](https://huggingface.co/datasets/TODO)
+[![Bench DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
+[![Full DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
 [![License](https://img.shields.io/badge/License-See%20LICENSE-lightgrey)](LICENSE)
 
 A reproducible pipeline for constructing **synthetic, identity-conditioned face
@@ -11,23 +13,31 @@ of one synthetic identity share a split (`retain` / `test` / `forget`),
 preventing identity leakage across training, evaluation, and sequential
 deletion schedules.
 
+The project publishes **two complementary datasets** (see
+[`DATASET_CARD.md`](DATASET_CARD.md)):
+
+| Release | Resolution | Contents | Purpose |
+|---|---|---|---|
+| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (~19,500) | Machine-unlearning benchmark (primary) |
+| **SFHQ-VirtualID-Full** | 1024×1024 candidates | Balanced (51,000) + imbalanced (~TBD) | General-purpose identity-conditioned faces |
+
 ## Dataset at a glance
 
 | Property | Value |
 |---|---|
 | **Source domain** | SFHQ (CC0 synthetic portraits) |
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
-| **Output resolution** | 224×224 (aligned face crops) / 1024×1024 (candidates) |
+| **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Full, candidates) |
 | **Identities** | 600 |
-| **Images per identity** | 75 (balanced) / 85 (candidates) / 85:40:20 gradient (imbalanced) |
-| **Total images** | 45,000 (224 balanced) / ~19,500 (224 imbalanced) / 51,000 (1024 candidates) / ~TBD (1024 imbalanced) |
+| **Images per identity** | 75 (Bench balanced) / 85 (Full candidates) / 85:40:20 gradient (imbalanced) |
+| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Full balanced) / ~TBD (Full imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 6 metadata columns |
 | **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
-| **Artifacts** | 4 dataset pairs: 224 balanced, 224 imbalanced, 1024 candidates, 1024 candidates-imbalanced |
+| **Artifacts** | 4 dataset pairs across 2 releases: Bench (224 balanced + imbalanced), Full (1024 balanced + imbalanced) |
 
 ## Why this dataset?
 
@@ -168,10 +178,16 @@ cd src
 # Precomputed CLIP features — use --skip-download after first run:
 python main.py --config-name step1_download dataset.skip_download=false
 python main.py --config-name step2_generate   # generate
-python main.py --config-name step3_preprocess # align + filter
-python main.py --config-name step4_extract    # embeddings
-python main.py --config-name step5_build      # build balanced + imbalanced
+python main.py --config-name step4_extract    # embeddings (on 1024 candidates)
+python main.py --config-name step3_preprocess # align + filter (224 crops)
+python main.py --config-name step5_build      # builds all four dataset pairs
 ```
+
+Note the order: extract now runs on the raw 1024×1024 candidates (Step 4)
+**before** preprocess (Step 3), because InsightFace detection fails on tight
+224 crops but works on full-resolution portraits.  The step numbers follow
+the Hydra config filenames; the pipeline scripts chain them in the correct
+order automatically.
 
 Each step accepts Hydra overrides; see [`conf/config.yaml`](conf/config.yaml)
 for all tunables.
@@ -241,12 +257,12 @@ columns.
 
 ### Release summary (all artifacts)
 
-| Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
-|---|---|---|---|---|---|
-| `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation benchmark |
-| `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | 85:40:20 | ~19,500 | Long-tail stress test |
-| `dataset_candidates.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
-| `dataset_candidates_imbalanced.csv/.parquet` | 1024×1024 candidates | 600 | 85:40:20 | ~TBD | Full-res long-tail stress test |
+| Release | Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
+|---|---|---|---|---|---|---|
+| **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation unlearning benchmark |
+| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | 85:40:20 | ~19,500 | Long-tail stress test |
+| **Full** | `dataset_candidates.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
+| **Full** | `dataset_candidates_imbalanced.csv/.parquet` | 1024×1024 candidates | 600 | 85:40:20 | ~TBD | Full-res long-tail stress test |
 
 All four share identical `identity_id`, `split`, `forget_step`, and
 `forget_variant` labels.  Demographics (age, gender) are derived from
@@ -330,9 +346,19 @@ Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST
 ## Citation
 
 ```bibtex
-@dataset{sfhq_instantid_v1,
-  title     = {{SFHQ-InstantID}: A Synthetic Identity-Conditioned Face Dataset
-               for Machine Unlearning},
+@dataset{sfhq_virtualid_bench,
+  title     = {{SFHQ-VirtualID-Bench}: Synthetic Identity-Conditioned Aligned
+               Face Crops for Machine Unlearning},
+  author    = {TODO},
+  year      = {2026},
+  version   = {1.0.0},
+  doi       = {TODO},
+  url       = {https://github.com/FaizPalwala/virtual-id-gen},
+}
+
+@dataset{sfhq_virtualid_full,
+  title     = {{SFHQ-VirtualID-Full}: Full-Resolution Synthetic
+               Identity-Conditioned Face Candidates},
   author    = {TODO},
   year      = {2026},
   version   = {1.0.0},

@@ -26,13 +26,18 @@ Once that finishes, your environment is fully primed.
 
 ### Quick start
 ```bash
-# Full pipeline (all five phases, chained with --dependency):
+# Full pipeline (all six phases, chained with --dependency):
 sbatch scripts/hpc_full_pipeline.sh
 
-# Or individual phases:
-sbatch scripts/hpc_generate.sh       # 4-GPU array, ~19 hr
+# Or individual phases (note: extract runs BEFORE preprocess):
+sbatch scripts/hpc_generate.sh       # 12-GPU array, ~12 hr
 sbatch scripts/hpc_merge.sh          # CPU, ~30 min (after generate)
-sbatch scripts/hpc_preprocess.sh     # 1 GPU, ~4 hr
-sbatch scripts/hpc_extract.sh        # 1 GPU, ~2 hr
-sbatch scripts/hpc_build.sh          # CPU, ~15 min
+sbatch scripts/hpc_extract.sh        # 1 GPU, ~2 hr (ArcFace on 1024 candidates)
+sbatch scripts/hpc_preprocess.sh     # 1 GPU, ~4 hr (MTCNN align + gate → 224 crops)
+sbatch scripts/hpc_build.sh          # CPU, ~15 min (builds all four dataset pairs)
 ```
+
+Extract runs on the raw 1024×1024 candidates **before** preprocess so
+InsightFace detection works on full portraits (it fails on tight 224 crops).
+The four dataset pairs (Bench balanced/imbalanced + Full balanced/imbalanced)
+are all produced by the build step from one pipeline run.
