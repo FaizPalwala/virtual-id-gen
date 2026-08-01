@@ -55,14 +55,13 @@ def merge_shards(
 
         df = pd.read_csv(manifest)
         base_id = shard_id * identities_per_shard
-        df["identityid"] = df["identityid"].astype(int) + base_id
-        df["clusterid"] = df["clusterid"].astype(int) + base_id
+        df["identity_id"] = df["identity_id"].astype(int) + base_id
 
         # Copy candidate images using shard-relative paths (not the stale
         # absolute TMPDIR paths stored in the manifest).
         shard_candidates = shard_dir / "candidates"
         for _, row in df.iterrows():
-            cid = int(row["clusterid"])
+            cid = int(row["identity_id"])
             trial = int(row["trial"])
             src = (
                 shard_candidates
@@ -95,7 +94,7 @@ def merge_shards(
         raise FileNotFoundError("No shard manifests found under " + str(root))
 
     combined = pd.concat(all_records, ignore_index=True)
-    combined.sort_values(["clusterid", "trial"], inplace=True)
+    combined.sort_values(["identity_id", "trial"], inplace=True)
     combined.to_csv(merged / "raw_candidate_manifest.csv", index=False)
 
     if all_skipped:
@@ -103,7 +102,7 @@ def merge_shards(
         combined_skipped.to_csv(merged / "skipped_seed_manifest.csv", index=False)
 
     n_candidates = len(combined)
-    n_identities = combined["clusterid"].nunique()
+    n_identities = combined["identity_id"].nunique()
     print(
         f"Merged {len(all_records)}/{shard_count} shards → "
         f"{n_candidates} candidates across {n_identities} identities (at {merged})"

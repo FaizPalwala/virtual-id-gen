@@ -220,8 +220,7 @@ def generate_identities(
                 # redundant ArcFace forward passes.
                 records.append(
                     {
-                        "identityid": cluster_id,
-                        "clusterid": cluster_id,
+                        "identity_id": cluster_id,
                         "trial": trial,
                         "seedpath": str(seed_path),
                         "seed_attempt": attempt_index,

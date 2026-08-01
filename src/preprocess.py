@@ -70,6 +70,8 @@ def preprocess_identity_candidates(
     candidates = candidates[
         candidates.raw_status.isin(["accepted_raw", "unvalidated"])
     ].copy()
+    # Translate from raw manifest naming (clusterid) to standard schema.
+    candidates.rename(columns={"clusterid": "identity_id"}, inplace=True)
     output_root = processed_root / "images"
     shutil.rmtree(output_root, ignore_errors=True)
     output_root.mkdir(parents=True, exist_ok=True)
@@ -189,7 +191,7 @@ def preprocess_identity_candidates(
             f"Rejection reasons: {rejection_counts}"
         )
     final_rows = []
-    for cluster_id, group in pd.DataFrame(accepted).groupby("clusterid", sort=True):
+    for cluster_id, group in pd.DataFrame(accepted).groupby("identity_id", sort=True):
         ranked = group.sort_values(
             ["detection_confidence", "laplacian_variance"],
             ascending=False,
@@ -201,7 +203,7 @@ def preprocess_identity_candidates(
             reasons = Counter(
                 item["rejection_reason"]
                 for item in rejected
-                if item["clusterid"] == cluster_id
+                if item["identity_id"] == cluster_id
             )
             if strict:
                 raise RuntimeError(
@@ -226,10 +228,10 @@ def preprocess_identity_candidates(
             cv2.imwrite(str(final_path), record.pop("_crop"))
             record["imagepath"] = str(final_path.relative_to(processed_root))
             final_rows.append(record)
-    final = pd.DataFrame(final_rows).sort_values(["clusterid", "imagepath"])
+    final = pd.DataFrame(final_rows).sort_values(["identity_id", "imagepath"])
     final = final[
         [
-            "clusterid",
+            "identity_id",
             "trial",
             "imagepath",
             "detection_confidence",
@@ -242,7 +244,7 @@ def preprocess_identity_candidates(
             {
                 "min_images_requested": imagesperidentity,
                 "final_images": len(final),
-                "images_per_identity": len(final) / max(1, final.clusterid.nunique()),
+                "images_per_identity": len(final) / max(1, final["identity_id"].nunique()),
                 "rejected": len(rejected),
                 "imgsize": imgsize,
                 "candidate_manifest": str(manifest_path),
