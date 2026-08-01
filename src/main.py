@@ -115,6 +115,37 @@ def main(cfg: DictConfig) -> None:
             ),
         )
 
+        # Build full-resolution 1024×1024 candidate datasets.
+        from build_dataset import (
+            build_candidates_dataset,
+            build_candidates_imbalanced,
+        )
+
+        LOGGER.info(
+            "Candidates dataset created at %s",
+            build_candidates_dataset(
+                str(root),
+                str(embeddings),
+                str(dataset),
+                nforget,
+                ntest,
+                forget_steps,
+                cfg.dataset.seed,
+            ),
+        )
+        LOGGER.info(
+            "Candidates imbalanced dataset created at %s",
+            build_candidates_imbalanced(
+                str(root),
+                str(embeddings),
+                str(dataset),
+                nforget,
+                ntest,
+                forget_steps,
+                cfg.dataset.seed,
+            ),
+        )
+
 
 if __name__ == "__main__":
     main()

@@ -590,3 +590,219 @@ def build_imbalanced_dataset(
           f"{n_high} high (up to 85 img), {n_medium} medium ({medium_bin_images} img), "
           f"{n_low} low ({low_bin_images} img).")
     return str(csv_path)
+
+
+# ── Candidate (full-resolution) dataset columns ──
+# Same core as OUTPUT_COLUMNS but excludes crop-level quality metrics
+# (laplacian_variance, detection_confidence) — meaningless on 1024
+# candidates before alignment.
+CANDIDATE_OUTPUT_COLUMNS = [
+    "image_path", "identity_id", "age_group", "age", "gender",
+    "split", "forget_step", "forget_variant",
+    "arcface_similarity", "pose", "expression", "lighting",
+    "setting", "camera", "raw_arcface_similarity",
+]
+
+
+def build_candidates_dataset(
+    identitydir: str,
+    embeddingsdir: str,
+    outputdir: str,
+    nforget: int = 40,
+    ntest: int = 60,
+    forget_steps: int = 15,
+    randomstate: int = 42,
+) -> str:
+    """Build the full-resolution 1024×1024 candidate dataset.
+
+    Reads the raw candidate manifest directly (not the processed identity
+    manifest), merges with 1024-based embeddings (identity-level join),
+    applies the same split/forget assignments as the balanced 224 dataset,
+    and outputs ``dataset_candidates.csv`` / ``.parquet``.
+
+    Differs from :func:`build_dataset` in that:
+    - Images are 1024×1024 candidates, not 224×224 aligned crops
+    - No ``laplacian_variance`` or ``detection_confidence`` (crop metrics)
+    - All 85 candidates per identity are included (no quality trim)
+    - 15 output columns (vs. 17 for the standard dataset)
+    """
+    manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
+    # The manifest may use 'clusterid' if merged by an older script.
+    id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
+    manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
+
+    candidates = manifest[["imagepath", "identity_id"]].copy()
+    candidates.drop_duplicates(inplace=True)
+
+    attributes = _load_attributes(embeddingsdir)
+    identity_demog = attributes.groupby("identity_id").first()[
+        ["agegroup", "age", "gender", "embedding"]
+    ].reset_index()
+
+    final = candidates.merge(identity_demog, on="identity_id", how="left", validate="many_to_one")
+
+    # Metadata columns from the manifest.
+    metadata = _load_candidate_metadata(identitydir)
+    if not metadata.empty:
+        final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
+
+    # ArcFace similarity for each candidate to its identity's candidate mean.
+    final = _add_arcface_similarity(final)
+
+    identities = sorted(final["identity_id"].unique())
+    if nforget + ntest >= len(identities):
+        raise ValueError("Split sizes must leave at least one retain identity.")
+
+    rng = np.random.RandomState(randomstate)
+    rng.shuffle(identities)
+    forget_ids = identities[:nforget]
+    test = identities[nforget : nforget + ntest]
+    split_map = (
+        {i: "forget" for i in forget_ids}
+        | {i: "test" for i in test}
+        | {i: "retain" for i in identities[nforget + ntest :]}
+    )
+    final["split"] = final["identity_id"].map(split_map)
+
+    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
+    final["forgetstep"] = (
+        final["identity_id"].map({cid: step for cid, (step, _) in step_map.items()})
+        .fillna(-1).astype(int)
+    )
+    final["forgetvariant"] = (
+        final["identity_id"].map({cid: variant for cid, (_, variant) in step_map.items()})
+        .fillna(-1).astype(int)
+    )
+
+    output = Path(outputdir)
+    output.mkdir(parents=True, exist_ok=True)
+    dataroot = output.parent
+    output_df = final.rename(
+        columns={
+            "imagepath": "image_path",
+            "agegroup": "age_group",
+            "forgetstep": "forget_step",
+            "forgetvariant": "forget_variant",
+        }
+    )
+    for col in CANDIDATE_OUTPUT_COLUMNS:
+        if col not in output_df.columns:
+            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+    output_df = output_df[CANDIDATE_OUTPUT_COLUMNS]
+    output_df["image_path"] = output_df["image_path"].apply(
+        lambda p: str((Path(identitydir) / p).relative_to(dataroot))
+    )
+
+    csv_path = output / "dataset_candidates.csv"
+    parquet_path = output / "dataset_candidates.parquet"
+    output_df.to_csv(csv_path, index=False)
+    output_df.to_parquet(parquet_path, index=False)
+
+    (output / "datasetsummary_candidates.json").write_text(
+        json.dumps({
+            "total_images": len(final),
+            "nclusters": len(identities),
+            "nforget_ids": nforget,
+            "forget_steps": forget_steps,
+            "split_sizes": {k: int(v) for k, v in final.groupby("split").size().items()},
+        }, indent=2)
+    )
+
+    print(f"[OK] Candidates dataset: {len(final)} images across {len(identities)} identities.")
+    return str(csv_path)
+
+
+def build_candidates_imbalanced(
+    identitydir: str,
+    embeddingsdir: str,
+    outputdir: str,
+    nforget: int = 40,
+    ntest: int = 60,
+    forget_steps: int = 15,
+    randomstate: int = 42,
+    high_bin_pct: float = 0.10,
+    low_bin_pct: float = 0.60,
+    low_bin_images: int = 20,
+    medium_bin_images: int = 40,
+) -> str:
+    """Imbalanced variant of the full-resolution candidate dataset.
+
+    Same 85:40:20 gradient as the 224 imbalanced, applied to the candidate
+    pool.  Shares ``identity_id``, ``split``, and forget assignments with
+    the balanced candidates dataset.
+    """
+    manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
+    id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
+    manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
+
+    candidates = manifest[["imagepath", "identity_id"]].copy()
+    candidates.drop_duplicates(inplace=True)
+
+    attributes = _load_attributes(embeddingsdir)
+    identity_demog = attributes.groupby("identity_id").first()[
+        ["agegroup", "age", "gender", "embedding"]
+    ].reset_index()
+
+    final = candidates.merge(identity_demog, on="identity_id", how="left", validate="many_to_one")
+
+    metadata = _load_candidate_metadata(identitydir)
+    if not metadata.empty:
+        final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
+
+    final = _add_arcface_similarity(final)
+
+    identities = sorted(final["identity_id"].unique())
+
+    # Popularity bins (same algorithm as imbalanced crops).
+    rng = np.random.RandomState(randomstate + 9999)
+    shuffled = identities.copy()
+    rng.shuffle(shuffled)
+    n_high = max(1, int(len(shuffled) * high_bin_pct))
+    n_low = max(1, int(len(shuffled) * low_bin_pct))
+    n_medium = len(shuffled) - n_high - n_low
+    high_ids = set(shuffled[:n_high])
+    low_ids = set(shuffled[-n_low:])
+    bin_map = {}
+    for cid in shuffled:
+        bin_map[cid] = "high" if cid in high_ids else ("low" if cid in low_ids else "medium")
+
+    rng_prune = np.random.RandomState(randomstate + 9998)
+    per_bin_images = {"low": low_bin_images, "medium": medium_bin_images, "high": 85}
+    drop_mask = pd.Series(False, index=final.index)
+    for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):
+        target = per_bin_images[bin_map[cid]]
+        rows = final[final["identity_id"] == cid]
+        n_keep = min(target, len(rows))
+        keep_idx = set(rng_prune.choice(rows.index, n_keep, replace=False))
+        drop_mask.loc[list(set(rows.index) - keep_idx)] = True
+    imbalanced = final[~drop_mask].copy()
+
+    output_columns = CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
+    output = Path(outputdir)
+    output.mkdir(parents=True, exist_ok=True)
+    dataroot = output.parent
+    output_df = imbalanced.rename(
+        columns={
+            "imagepath": "image_path",
+            "agegroup": "age_group",
+            "forgetstep": "forget_step",
+            "forgetvariant": "forget_variant",
+        }
+    )
+    for col in CANDIDATE_OUTPUT_COLUMNS:
+        if col not in output_df.columns:
+            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+    output_df = output_df[output_columns]
+    output_df["image_path"] = output_df["image_path"].apply(
+        lambda p: str((Path(identitydir) / p).relative_to(dataroot))
+    )
+
+    csv_path = output / "dataset_candidates_imbalanced.csv"
+    parquet_path = output / "dataset_candidates_imbalanced.parquet"
+    output_df.to_csv(csv_path, index=False)
+    output_df.to_parquet(parquet_path, index=False)
+
+    print(f"[OK] Candidates imbalanced: {len(imbalanced)} images across "
+          f"{len(identities)} identities — "
+          f"{n_high} high, {n_medium} medium, {n_low} low.")
+    return str(csv_path)
