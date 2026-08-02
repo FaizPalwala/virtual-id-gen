@@ -19,6 +19,8 @@ dataset:
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false
+  # path to raw_candidate_manifest.csv (set by hpc_extract.sh override)
+  candidate_manifest: null
 pipeline:
   ctxid: 0
   imgsize: 224

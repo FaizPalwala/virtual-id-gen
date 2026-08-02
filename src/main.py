@@ -76,11 +76,14 @@ def main(cfg: DictConfig) -> None:
     if cfg.steps.extract:
         from extract_embeddings import extract_embeddings
 
+        candidate_manifest = cfg.dataset.get("candidate_manifest") or str(
+            identities / "raw_candidate_manifest.csv"
+        )
         extract_embeddings(
             str(identities / "candidates"),
             str(embeddings),
             cfg.pipeline.ctxid,
-            candidate_manifest=str(identities / "raw_candidate_manifest.csv"),
+            candidate_manifest=candidate_manifest,
         )
     if cfg.steps.build:
         from build_dataset import build_dataset
