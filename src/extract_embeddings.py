@@ -154,7 +154,14 @@ def extract_embeddings(
         raise FileNotFoundError(f"No final images found under {input_path}")
 
     # Build identity lookup from the candidate manifest when available.
+    # The manifest lives next to the candidates dir by pipeline convention
+    # (dataroot/identities/raw_candidate_manifest.csv); infer it rather than
+    # require a config override.
     identity_map: dict[str, int] = {}
+    if candidate_manifest is None:
+        inferred = input_path.parent / "raw_candidate_manifest.csv"
+        if inferred.is_file():
+            candidate_manifest = str(inferred)
     if candidate_manifest:
         manifest = pd.read_csv(candidate_manifest)
         # Identity column in the raw manifest (pre-sweep: identity_id).

@@ -55,7 +55,6 @@ cd "$REPO_DIR/src"
 
 python main.py --config-name step4_extract \
     dataset.dataroot="$DATA_DIR" \
-    dataset.candidate_manifest="$DATA_DIR/identities/raw_candidate_manifest.csv" \
     > "$REPO_DIR/logs/extract_hyb_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
