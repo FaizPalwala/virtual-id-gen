@@ -167,7 +167,16 @@ def extract_embeddings(
         # Identity column in the raw manifest (pre-sweep: identity_id).
         id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
         for _, row in manifest.iterrows():
-            identity_map[str(row["raw_candidatepath"])] = int(row[id_col])
+            # Normalize: merge_shards may write absolute paths (HPC scratch
+            # mount), but the lookup below produces paths relative to
+            # input_path.parent (identities/).  Derive the relative form so
+            # the key space matches regardless of how the manifest was written.
+            raw = Path(row["raw_candidatepath"])
+            try:
+                lookup_key = str(raw.relative_to(input_path.parent))
+            except ValueError:
+                lookup_key = str(raw)
+            identity_map[lookup_key] = int(row[id_col])
 
     app = load_arcface_model(ctxid)
     embeddings, paths, ages, genders, groups, identity_ids = [], [], [], [], [], []
