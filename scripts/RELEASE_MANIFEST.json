@@ -1,7 +1,7 @@
 {
   "family": "SFHQ-VirtualID",
   "version": "1.0.0",
-  "release_date": "TODO",
+  "release_date": "PENDING — dissertation submission; uploads gated/private until then",
   "releases": {
     "bench": {
       "name": "SFHQ-VirtualID-Bench",
@@ -51,7 +51,7 @@
   "shard_seeds": [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64],
   "shard_count": 12,
   "identities_per_shard": 50,
-  "git_commit": "TODO",
+  "git_commit": "309bed3441f170401c78797025508829c3daeddb",
   "generation_config": {
     "base_model": "RunDiffusion/Juggernaut-XL-v9",
     "num_inference_steps": 30,
@@ -86,13 +86,14 @@
     "python": "3.10",
     "torch": "2.6.0+cu124",
     "diffusers": "0.39.0",
-    "transformers": "TODO",
-    "insightface": "TODO",
-    "facenet_pytorch": "TODO",
-    "opencv": "TODO",
-    "pillow": "TODO",
-    "numpy": "TODO",
-    "pandas": "TODO"
+    "onnxruntime_gpu": "1.19.2",
+    "transformers": "TBD (pip freeze on Aire)",
+    "insightface": "TBD (pip freeze on Aire)",
+    "facenet_pytorch": "TBD (pip freeze on Aire)",
+    "opencv": "TBD (pip freeze on Aire)",
+    "pillow": "TBD (pip freeze on Aire)",
+    "numpy": "TBD (pip freeze on Aire)",
+    "pandas": "TBD (pip freeze on Aire)"
   },
   "model_revisions": {
     "juggernaut_xl_v9": {
