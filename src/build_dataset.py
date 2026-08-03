@@ -47,6 +47,12 @@ def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
     id_path = embeddings / "identity_ids.npy"
     if id_path.exists():
         df["identity_id"] = np.load(id_path)
+    # Derive trial from candidate filename for per-crop embedding matching.
+    # Format: candidates/identity_NNN/candidate_YYY.png → trial=YYY.
+    # identitymanifest.csv carries the same trial — the join key that links
+    # each 224 crop to the 1024 candidate it was cropped from.
+    t = df["imagepath"].str.extract(r"candidate_(\d+)")[0]
+    df["trial"] = pd.to_numeric(t, errors="coerce").astype("Int64")
     return df
 
 
@@ -129,18 +135,20 @@ def build_dataset(
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
 
-    # Demographics are per-identity (from 1024 extraction); take the first.
-    identity_demog = attributes.groupby("identity_id").first()[
-        ["agegroup", "age", "gender", "embedding"]
-    ].reset_index()
-
-    final = manifest[["imagepath", "identity_id", "detection_confidence", "laplacian_variance"]].merge(
-        identity_demog, on="identity_id", how="left", validate="many_to_one"
-    )
+    # Match each 224 crop to its parent 1024 candidate embedding via the
+    # (identity_id, trial) join key.  identitymanifest.csv carries trial
+    # from preprocess; _load_attributes derives trial from the candidate
+    # filename.  This gives per-crop embeddings → arcface_similarity is
+    # a real within-identity spread, not trivially 1.0.
+    attrs_merge = attributes[
+        ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
+    ].copy()
+    final = manifest[
+        ["imagepath", "identity_id", "trial", "detection_confidence", "laplacian_variance"]
+    ].merge(attrs_merge, on=["identity_id", "trial"], how="left")
     if len(final) != len(manifest):
-        # Should not happen with identity-level merge, but guard for safety.
         raise RuntimeError(
-            f"Demographic join lost rows: {len(manifest)} → {len(final)}"
+            f"Trial-based join lost rows: {len(manifest)} → {len(final)}"
         )
 
     # Join generation metadata (pose, expression, lighting, ...) from the
@@ -379,16 +387,15 @@ def build_imbalanced_dataset(
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
 
-    identity_demog = attributes.groupby("identity_id").first()[
-        ["agegroup", "age", "gender", "embedding"]
-    ].reset_index()
-
-    final = manifest[["imagepath", "identity_id", "detection_confidence", "laplacian_variance"]].merge(
-        identity_demog, on="identity_id", how="left", validate="many_to_one"
-    )
+    attrs_merge = attributes[
+        ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
+    ].copy()
+    final = manifest[
+        ["imagepath", "identity_id", "trial", "detection_confidence", "laplacian_variance"]
+    ].merge(attrs_merge, on=["identity_id", "trial"], how="left")
     if len(final) != len(manifest):
         raise RuntimeError(
-            f"Demographic join lost rows: {len(manifest)} -> {len(final)}"
+            f"Trial-based join lost rows: {len(manifest)} -> {len(final)}"
         )
 
     metadata = _load_candidate_metadata(identitydir)
@@ -636,15 +643,15 @@ def build_candidates_dataset(
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
     manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
 
-    candidates = manifest[["imagepath", "identity_id"]].copy()
+    candidates = manifest[["imagepath", "identity_id", "trial"]].copy()
     candidates.drop_duplicates(inplace=True)
 
     attributes = _load_attributes(embeddingsdir)
-    identity_demog = attributes.groupby("identity_id").first()[
-        ["agegroup", "age", "gender", "embedding"]
-    ].reset_index()
+    attrs_merge = attributes[
+        ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
+    ].copy()
 
-    final = candidates.merge(identity_demog, on="identity_id", how="left", validate="many_to_one")
+    final = candidates.merge(attrs_merge, on=["identity_id", "trial"], how="left")
 
     # Metadata columns from the manifest.
     metadata = _load_candidate_metadata(identitydir)
@@ -742,15 +749,15 @@ def build_candidates_imbalanced(
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
     manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
 
-    candidates = manifest[["imagepath", "identity_id"]].copy()
+    candidates = manifest[["imagepath", "identity_id", "trial"]].copy()
     candidates.drop_duplicates(inplace=True)
 
     attributes = _load_attributes(embeddingsdir)
-    identity_demog = attributes.groupby("identity_id").first()[
-        ["agegroup", "age", "gender", "embedding"]
-    ].reset_index()
+    attrs_merge = attributes[
+        ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
+    ].copy()
 
-    final = candidates.merge(identity_demog, on="identity_id", how="left", validate="many_to_one")
+    final = candidates.merge(attrs_merge, on=["identity_id", "trial"], how="left")
 
     metadata = _load_candidate_metadata(identitydir)
     if not metadata.empty:
@@ -783,6 +790,11 @@ def build_candidates_imbalanced(
         keep_idx = set(rng_prune.choice(rows.index, n_keep, replace=False))
         drop_mask.loc[list(set(rows.index) - keep_idx)] = True
     imbalanced = final[~drop_mask].copy()
+
+    # Add popularity annotation columns (same as build_imbalanced_dataset).
+    imbalanced["popularity_bin"] = imbalanced["identity_id"].map(bin_map)
+    id_counts = imbalanced.groupby("identity_id").size()
+    imbalanced["images_per_identity"] = imbalanced["identity_id"].map(id_counts)
 
     output_columns = CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
     output = Path(outputdir)
