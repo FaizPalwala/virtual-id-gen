@@ -1,15 +1,19 @@
 """
 extract_embeddings.py
-Extract ArcFace features and demographic proxy attributes from final crops.
+Extract ArcFace features and demographic proxy attributes from the 1024×1024
+raw candidates.
 
-Only run this module after ``preprocess_identity_candidates`` has created the
-final ``identities/images`` directory.  Paths written here are used verbatim by
-``builddataset.py``.
+Runs on ``identities/candidates`` (the merge output) BEFORE preprocess —
+detection works reliably on full-resolution portraits.  Preprocess is a
+sibling step, not a prerequisite: both consume the merged candidates +
+raw_candidate_manifest.csv, and neither reads the other's output.  Paths
+written here are joined back to crops by build_dataset.py via the
+(identity_id, trial) key.
 
 Example:
-    python extract_embeddings.py \\
-        --inputdir ../data/processed/images \\
-        --outputdir ../data/embeddings \\
+    python extract_embeddings.py \
+        --inputdir ../data/identities/candidates \
+        --outputdir ../data/embeddings \
         --ctxid 0
 """
 from __future__ import annotations
