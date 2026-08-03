@@ -9,7 +9,8 @@ the release so the licence position is defensible if upstream pages change.
 | File | Source | What it proves | Captured |
 |---|---|---|---|
 | `kaggle_sfhq_part1.html` | https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-1 | SFHQ Part 1 Kaggle listing licence = **CC0: Public Domain** (schema.org `license` field, dataset id 2437902, creator David Beniaguev). Raw capture — renders blank in a browser (JS SPA); see `kaggle_sfhq_part1.EXTRACT.md` for the human-readable record | 2026-08-03 |
-| `kaggle_sfhq_part1.EXTRACT.md` | derived from the raw capture | Human-readable extract: verbatim JSON-LD licence block, dataset metadata, sha256, verification commands | 2026-08-03 |
+| `kaggle_sfhq_part1.api.json` | Kaggle public API: `https://www.kaggle.com/api/v1/datasets/view/selfishgene/synthetic-faces-high-quality-sfhq-part-1` | **First-party structured record** — `licenseNameNullable: "CC0: Public Domain"`, dataset id 2437902, creator, size. The preferred machine-readable evidence (re-fetchable by any reviewer) | 2026-08-03 |
+| `kaggle_sfhq_part1.EXTRACT.md` | derived from the raw capture + API | Human-readable extract: verbatim JSON-LD licence block, dataset metadata, sha256, API record, verification commands | 2026-08-03 |
 | `openrail-m_license.txt` | https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/raw/main/LICENSE.md | Full CreativeML Open RAIL-M text: "Licensor claims no rights in the Output You generate" + Attachment A restricted uses | 2026-08-03 |
 
 ## Licence summary (verified 2026-08-03)
