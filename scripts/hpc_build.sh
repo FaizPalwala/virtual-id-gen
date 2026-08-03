@@ -3,7 +3,7 @@
 # hpc_build.sh — Phase 4: Assemble Final Dataset CSV
 # ==========================================
 #SBATCH --job-name=msc_build
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 #SBATCH --output=logs/%x_%j.out
