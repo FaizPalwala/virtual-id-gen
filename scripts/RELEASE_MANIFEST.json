@@ -74,12 +74,12 @@
       "image_path", "identity_id", "age_group", "age", "gender", "split",
       "forget_step", "forget_variant", "arcface_similarity",
       "laplacian_variance", "detection_confidence", "pose", "expression",
-      "lighting", "setting", "camera", "raw_arcface_similarity"
+      "lighting", "setting", "camera"
     ],
     "full": [
       "image_path", "identity_id", "age_group", "age", "gender", "split",
       "forget_step", "forget_variant", "arcface_similarity", "pose",
-      "expression", "lighting", "setting", "camera", "raw_arcface_similarity"
+      "expression", "lighting", "setting", "camera"
     ]
   },
   "package_versions": {

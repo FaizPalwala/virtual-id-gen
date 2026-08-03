@@ -27,15 +27,13 @@
         "expression": {"type": "string"},
         "lighting": {"type": "string"},
         "setting": {"type": "string"},
-        "camera": {"type": "string"},
-        "raw_arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+        "camera": {"type": "string"}
       },
       "required": [
         "image_path", "identity_id", "age_group", "age", "gender",
         "split", "forget_step", "forget_variant",
         "arcface_similarity", "laplacian_variance", "detection_confidence",
-        "pose", "expression", "lighting", "setting", "camera",
-        "raw_arcface_similarity"
+        "pose", "expression", "lighting", "setting", "camera"
       ],
       "additionalProperties": false
     },
@@ -55,8 +53,8 @@
       "properties": {
         "image_path": {
           "type": "string",
-          "description": "Release-relative path to the 1024x1024 candidate, e.g. identities/candidates/identity_037/candidate_012.png",
-          "pattern": "^(identities/)?candidates/identity_\\d{3}/candidate_\\d{3}\\.png$"
+          "description": "Release-relative path to the 1024x1024 candidate, e.g. images/identity_037/candidate_012.png",
+          "pattern": "^images/identity_\\d{3}/candidate_\\d{3}\\.png$"
         },
         "identity_id": {"type": "integer", "minimum": 0, "maximum": 599},
         "age_group": {"type": "integer", "minimum": 0, "maximum": 3},
@@ -70,14 +68,12 @@
         "expression": {"type": "string"},
         "lighting": {"type": "string"},
         "setting": {"type": "string"},
-        "camera": {"type": "string"},
-        "raw_arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+        "camera": {"type": "string"}
       },
       "required": [
         "image_path", "identity_id", "age_group", "age", "gender",
         "split", "forget_step", "forget_variant", "arcface_similarity",
-        "pose", "expression", "lighting", "setting", "camera",
-        "raw_arcface_similarity"
+        "pose", "expression", "lighting", "setting", "camera"
       ],
       "additionalProperties": false
     },

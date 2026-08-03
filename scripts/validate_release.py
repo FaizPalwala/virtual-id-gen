@@ -230,8 +230,22 @@ def validate(
             )
 
     # ---- 8b. Orphan check: every image on disk is referenced ----
+    # The release image set is the UNION of all metadata CSVs in the release
+    # (balanced + imbalanced variants reference overlapping but non-identical
+    # image sets — e.g. imbalanced-only high-bin crops).  Checking against a
+    # single CSV would flag legitimately-referenced images as orphans, so we
+    # union every *.csv under the release's metadata/ directory.
     if check_orphans:
         referenced = set(df["image_path"])
+        metadata_dir = root / "metadata"
+        if metadata_dir.is_dir():
+            for csv in metadata_dir.glob("*.csv"):
+                try:
+                    other = pd.read_csv(csv)
+                    if "image_path" in other.columns:
+                        referenced |= set(other["image_path"])
+                except Exception:
+                    pass  # non-tabular CSV (e.g. summary) — ignore
         # The images/ tree is the release image root
         images_root = root / "images"
         if not images_root.is_dir():
@@ -246,7 +260,7 @@ def validate(
             if orphans:
                 failures.append(
                     f"{len(orphans)} orphan images on disk not referenced by "
-                    f"{metadata_csv}. First 5: {orphans[:5]}"
+                    f"any metadata CSV. First 5: {orphans[:5]}"
                 )
 
     # ---- 9. Checksums ----
