@@ -106,6 +106,10 @@ def preprocess_identity_candidates(
         if smoke_mode and idx >= max_candidates:
             break
         source = Path(row.raw_candidatepath)
+        if not source.is_absolute():
+            # Manifest paths are relative to the identities dir (portable
+            # manifest contract); resolve against it.
+            source = root / source
         reason = None
         confidence = None
         sharpness = None

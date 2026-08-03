@@ -75,15 +75,18 @@ def merge_shards(
             dst = dst_cluster / src.name
             if not dst.exists():
                 shutil.copy2(src, dst)
-            df.at[_, "raw_candidatepath"] = str(dst)
+            # Store the path RELATIVE to the identities dir (pipeline
+            # contract: manifests must be portable across machines).
+            df.at[_, "raw_candidatepath"] = str(dst.relative_to(merged))
 
         # Rewrite stale TMPDIR seed paths to the persistent raw directory.
         # generate_identities stores absolute /tmp/job.XXXX/.../seeds/file.jpg
         # paths in seedpath, which are dead by the time preprocessing runs.
+        # Store relative to the identities dir's parent (the data root).
         if seedsdir and "seedpath" in df.columns:
             seeds_root = Path(seedsdir)
             df["seedpath"] = df["seedpath"].apply(
-                lambda p: str(seeds_root / Path(p).name)
+                lambda p: str((seeds_root / Path(p).name).relative_to(merged.parent))
             )
 
         all_records.append(df)

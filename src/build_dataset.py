@@ -119,6 +119,23 @@ def _distribute_forget(
     return mapping
 
 
+def _to_dataroot_relative(p: str, base_dir: Path, dataroot: Path) -> str:
+    """Convert a manifest image path to a dataroot-relative release path.
+
+    Handles two conventions:
+    - absolute paths (legacy manifests written before the portability fix)
+    - relative-to-*base_dir* paths (current portable manifest contract;
+      base_dir is the identities dir for candidates, processed for crops).
+
+    This keeps release CSVs portable: every ``image_path`` resolves against
+    the dataset root on any machine, regardless of where the pipeline ran.
+    """
+    path = Path(p)
+    if path.is_absolute():
+        return str(path.relative_to(dataroot))
+    return str((base_dir / path).relative_to(dataroot))
+
+
 def build_dataset(
     identitydir: str,
     embeddingsdir: str,
@@ -221,6 +238,7 @@ def build_dataset(
 
     # Cluster samples: asymmetric matplotlib grid per identity.
     samples_root = Path(outputdir) / "cluster_samples"
+    dataroot = Path(outputdir).parent
     if samples_root.exists():
         import shutil
 
@@ -248,8 +266,13 @@ def build_dataset(
         # Collect up to 4 images: seed + 3 examples
         image_paths = []
         seed_path = seeds.get(cid, None)
-        if seed_path and Path(seed_path).exists():
-            image_paths.append(seed_path)
+        if seed_path:
+            resolved_seed = Path(seed_path)
+            if not resolved_seed.is_absolute():
+                # Manifest seedpath is relative to the data root.
+                resolved_seed = dataroot / resolved_seed
+            if resolved_seed.exists():
+                image_paths.append(str(resolved_seed))
         examples = final[final["identity_id"] == cid].imagepath.head(3)
         identity_root = Path(identitydir)
         for i, img_path in enumerate(examples, 1):
@@ -322,7 +345,7 @@ def build_dataset(
     output_df = output_df[OUTPUT_COLUMNS]
     output_df["image_path"] = (
         output_df["image_path"]
-        .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
+        .apply(lambda p: _to_dataroot_relative(p, Path(identitydir), dataroot))
     )
     csv_path = output / "dataset.csv"
     parquet_path = output / "dataset.parquet"
@@ -548,7 +571,7 @@ def build_imbalanced_dataset(
     output_df = output_df[output_columns]
     output_df["image_path"] = (
         output_df["image_path"]
-        .apply(lambda p: str((Path(identitydir) / p).relative_to(dataroot)))
+        .apply(lambda p: _to_dataroot_relative(p, Path(identitydir), dataroot))
     )
 
     csv_path = output / "dataset_imbalanced.csv"
@@ -709,8 +732,10 @@ def build_candidates_dataset(
         if col not in output_df.columns:
             output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
     output_df = output_df[CANDIDATE_OUTPUT_COLUMNS]
+    # Candidates manifest paths are relative to the identities dir, so base
+    # the resolver at identitydir/identities (identitydir == dataroot here).
     output_df["image_path"] = output_df["image_path"].apply(
-        lambda p: str((Path(identitydir) / p).relative_to(dataroot))
+        lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
     csv_path = output / "dataset_candidates.csv"
@@ -858,7 +883,7 @@ def build_candidates_imbalanced(
             output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
     output_df = output_df[output_columns]
     output_df["image_path"] = output_df["image_path"].apply(
-        lambda p: str((Path(identitydir) / p).relative_to(dataroot))
+        lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
     csv_path = output / "dataset_candidates_imbalanced.csv"
