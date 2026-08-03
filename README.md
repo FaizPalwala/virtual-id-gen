@@ -71,12 +71,13 @@ flowchart TD
     B --> C[InstantID + Juggernaut-XL-v9<br/>identity-conditioned generation]
     C --> D[Merge 12-GPU shards]
     D --> E[ArcFace extraction on<br/>1024x1024 candidates]
-    E --> F[MTCNN alignment<br/>sharpness + ArcFace gating]
-    F --> G[Identity-level splits<br/>retain / test / forget]
-    G --> H[dataset.csv + parquet<br/>224x224 release artifact]
-    G --> I[dataset_imbalanced.csv<br/>224x224 85:40:20 gradient]
+    D --> F[MTCNN alignment<br/>sharpness + ArcFace gating]
+    E --> G[Identity-level splits<br/>retain / test / forget]
+    F --> G
     E --> J[dataset_candidates.csv<br/>1024x1024 release artifact]
     J --> K[dataset_candidates_imbalanced<br/>1024x1024 85:40:20]
+    G --> H[dataset.csv + parquet<br/>224x224 release artifact]
+    G --> I[dataset_imbalanced.csv<br/>224x224 85:40:20 gradient]
 ```
 
 ### Phase breakdown
@@ -90,10 +91,13 @@ flowchart TD
 | 5. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, sharpness + ArcFace gating → 224×224 crops |
 | 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | All four artifacts: 224 balanced/imbalanced + 1024 balanced/imbalanced |
 
-Extract now runs **before** preprocess on the 1024×1024 raw candidates to fix
-the demographics bug (InsightFace detection fails on tight 224 crops but works
-on full-resolution portraits).  The build step produces four dataset pairs from
-a single pipeline run.
+Extract runs on the 1024×1024 raw candidates (detection works on full
+portraits — it fails on tight 224 crops, which previously degraded all
+demographics to constants).  Extract and preprocess are **sibling steps**:
+both consume the merge output and neither reads the other's output, so
+they can run **in parallel on two GPUs** to halve the wall time.  The build
+step joins their outputs through the (identity_id, trial) key and produces
+four dataset pairs from a single pipeline run.
 
 ### Configuration
 
