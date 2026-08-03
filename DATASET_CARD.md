@@ -86,6 +86,14 @@ interpreted as such.  The confound columns (`arcface_similarity`,
 `laplacian_variance`, `detection_confidence`, `gender`) are included so
 downstream MIA/fairness analyses can control for per-identity variation.
 
+**Age labels are per-image, not per-identity.**  Each image carries the
+gender/age estimate taken on its parent 1024×1024 candidate, so one
+identity can span several age groups (e.g. identity 558 ranges 23–65)
+while remaining recognisably the same person.  This is intentional: the
+synthetic identity appears at different ages, and per-image labels prevent
+an age classifier from shortcutting to identity.  Do not collapse to a
+per-identity constant.
+
 ### Split isolation invariant
 
 Every `identity_id` maps to exactly one `split`.  No identity's images appear

@@ -138,6 +138,16 @@ def build_dataset(
     # from preprocess; _load_attributes derives trial from the candidate
     # filename.  This gives per-crop embeddings → arcface_similarity is
     # a real within-identity spread, not trivially 1.0.
+    #
+    # NOTE — per-identity age variance is a FEATURE, not noise to suppress:
+    # each identity's images carry their own InsightFace gender/age estimate
+    # (taken on the parent 1024×1024 candidate), so one identity can span
+    # multiple age_group values (e.g. identity 558 ranges 23–65).  The
+    # synthetic identity stays recognisably the same person while appearing
+    # at different ages — a realism property that also prevents the age
+    # classifier from shortcutting to identity (identity_id → constant age).
+    # Do not collapse to a per-identity constant (first/mode); keep the
+    # per-image proxy labels.
     attrs_merge = attributes[
         ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
     ].copy()

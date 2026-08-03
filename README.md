@@ -204,8 +204,8 @@ for all tunables.
 |---|---|---|
 | `image_path` | string | Relative path: `processed/images/identity_NNN/accepted_XXX.jpg` |
 | `identity_id` | int (0–599) | Synthetic identity cluster ID |
-| `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior |
-| `age` | int | Raw InsightFace age estimate |
+| `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior. Per-image (see note below) |
+| `age` | int | Raw InsightFace age estimate. Per-image (see note below) |
 | `gender` | int (0/1) | InsightFace gender classifier output |
 | `split` | string | `retain`, `test`, or `forget` |
 | `forget_step` | int (0–14, -1) | Unlearning step; -1 for non-forget |
@@ -213,6 +213,15 @@ for all tunables.
 | `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean ArcFace embedding (confound control) |
 | `laplacian_variance` | float | Sharpness score from quality filter (quality confound control) |
 | `detection_confidence` | float | Face detector confidence (alignment quality control) |
+
+> **Per-image age labels (by design).** `age_group` and `age` are estimated
+> per image on the parent 1024×1024 candidate (InsightFace gender/age
+> classifier), so a single identity can span multiple age groups — e.g.
+> identity 558 ranges 23–65 across its images while remaining recognisably
+> the same person.  This is a deliberate realism property: the synthetic
+> identity appears at different ages, and the per-image labels prevent an
+> age classifier from shortcutting to identity (`identity_id → constant
+> age`).  Do not collapse to a per-identity constant when using the data.
 
 All crops are stored as **224×224** uint8 BGR.  Downstream classifiers using
 ImageNet-pretrained backbones (e.g. ResNet-18) must convert to RGB and
