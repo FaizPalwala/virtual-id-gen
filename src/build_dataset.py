@@ -28,7 +28,6 @@ OUTPUT_COLUMNS = [
     "split", "forget_step", "forget_variant",
     "arcface_similarity", "laplacian_variance", "detection_confidence",
     "pose", "expression", "lighting", "setting", "camera",
-    "raw_arcface_similarity",
 ]
 
 
@@ -90,7 +89,6 @@ def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
     id_col = "identity_id" if "identity_id" in df.columns else "clusterid"
     metadata_cols = [
         "pose", "expression", "lighting", "setting", "camera",
-        "raw_arcface_similarity",
     ]
     available = [c for c in metadata_cols if c in df.columns]
     if not available:
@@ -612,7 +610,7 @@ CANDIDATE_OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
     "split", "forget_step", "forget_variant",
     "arcface_similarity", "pose", "expression", "lighting",
-    "setting", "camera", "raw_arcface_similarity",
+    "setting", "camera",
 ]
 
 

@@ -33,7 +33,7 @@ The project publishes **two complementary datasets** (see
 | **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Full balanced) / ~TBD (Full imbalanced) |
 | **Splits** | Retain 450, Test 90, Forget 60 identities |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
-| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 6 metadata columns |
+| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
 | **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
@@ -246,7 +246,6 @@ context?).
 | `lighting` | string | Lighting condition |
 | `setting` | string | Background/scene |
 | `camera` | string | Camera angle |
-| `raw_arcface_similarity` | float | Full-res candidate's cosine similarity to the source identity seed |
 
 No `laplacian_variance` or `detection_confidence` — these are crop-level
 quality metrics and are meaningless on raw candidates.
