@@ -794,6 +794,43 @@ def build_candidates_imbalanced(
     id_counts = imbalanced.groupby("identity_id").size()
     imbalanced["images_per_identity"] = imbalanced["identity_id"].map(id_counts)
 
+    # ── Split + forget assignment (MUST match the other three artifacts) ──
+    # Design choice: identical algorithm and seed to build_dataset /
+    # build_candidates_dataset / build_imbalanced_dataset — same identity
+    # pool, same randomstate — so the same identities are forget/test/retain
+    # in all four artifacts.  Cross-variant comparison (balanced vs
+    # imbalanced, 224 vs 1024) is only valid if split membership is
+    # invariant; this block guarantees it.
+    imbalanced_ids = sorted(imbalanced["identity_id"].unique())
+    if nforget + ntest >= len(imbalanced_ids):
+        raise ValueError("Split sizes must leave at least one retain identity.")
+    rng_split = np.random.RandomState(randomstate)
+    rng_split.shuffle(imbalanced_ids)
+    forget_ids = imbalanced_ids[:nforget]
+    test_ids = imbalanced_ids[nforget : nforget + ntest]
+    split_map = (
+        {cid: "forget" for cid in forget_ids}
+        | {cid: "test" for cid in test_ids}
+        | {cid: "retain" for cid in imbalanced_ids[nforget + ntest :]}
+    )
+    imbalanced["split"] = imbalanced["identity_id"].map(split_map)
+
+    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
+    imbalanced["forgetstep"] = (
+        imbalanced["identity_id"].map(
+            {cid: step for cid, (step, _) in step_map.items()}
+        )
+        .fillna(-1)
+        .astype(int)
+    )
+    imbalanced["forgetvariant"] = (
+        imbalanced["identity_id"].map(
+            {cid: variant for cid, (_, variant) in step_map.items()}
+        )
+        .fillna(-1)
+        .astype(int)
+    )
+
     output_columns = CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
