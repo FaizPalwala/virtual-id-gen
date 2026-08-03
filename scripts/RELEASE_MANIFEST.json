@@ -97,18 +97,21 @@
   "model_revisions": {
     "juggernaut_xl_v9": {
       "repo": "RunDiffusion/Juggernaut-XL-v9",
-      "revision": "TODO",
-      "download_date": "TODO"
+      "revision": "cf419233522daa0b9ea36c3aff98fa2cab1fb0fb",
+      "download_date": "2026-05-08 (verified live 2026-08-03)",
+      "license": "creativeml-openrail-m"
     },
     "instantid": {
-      "repo": "TODO",
-      "revision": "TODO",
-      "download_date": "TODO"
+      "repo": "InstantX/InstantID (Hugging Face weights + code)",
+      "revision": "57b32dfee076092ad2930c71fd6d439c2c3b1820",
+      "download_date": "2024-01-22 (verified live 2026-08-03)",
+      "license": "apache-2.0"
     },
     "controlnet": {
       "repo": "diffusers/controlnet-canny-sdxl-1.0",
-      "revision": "TODO",
-      "download_date": "TODO"
+      "revision": "eb115a19a10d14909256db740ed109532ab1483c",
+      "download_date": "2023-09-19 (verified live 2026-08-03)",
+      "license": "openrail++"
     },
     "insightface_buffalo_l": {
       "pack": "buffalo_l",
@@ -120,6 +123,10 @@
     "dataset": "SFHQ",
     "url": "https://github.com/SelfishGene/SFHQ-dataset",
     "kaggle_listing_licence": "CC0 / Public Domain",
+    "kaggle_part1_url": "https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-1",
+    "kaggle_dataset_id": 2437902,
+    "kaggle_creator": "David Beniaguev (selfishgene)",
+    "kaggle_licence_evidence": "licence_evidence/kaggle_sfhq_part1.html (schema.org license=CC0: Public Domain, verified live 2026-08-03)",
     "part": 1,
     "image_count": "~90000",
     "seed_selection": "CLIP features + KMeans diversity selection",

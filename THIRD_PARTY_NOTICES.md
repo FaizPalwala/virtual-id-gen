@@ -15,9 +15,9 @@ upstream sources listed below under each project's own licence terms.
 
 | Component | Repository | Weights | Licence | Output-use terms |
 |---|---|---|---|---|
-| Juggernaut-XL-v9 | [RunDiffusion/Juggernaut-XL-v9](https://huggingface.co/RunDiffusion/Juggernaut-XL-v9) | Hugging Face | RunDiffusion custom (non-commercial-friendly; see model card) | Permits image generation; check model card for current terms |
-| InstantID | [InstantX/InstantID](https://github.com/InstantX/InstantID) | Hugging Face | Apache 2.0 (code) | Model weights licence may differ — check upstream |
-| ControlNet (SDXL) | [diffusers/controlnet-canny-sdxl-1.0](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0) | Hugging Face | OpenRAIL++-M | Same output-use terms as SDXL base |
+| Juggernaut-XL-v9 | [RunDiffusion/Juggernaut-XL-v9](https://huggingface.co/RunDiffusion/Juggernaut-XL-v9) | Hugging Face (`cf41923…`) | **CreativeML Open RAIL-M** (verified 2026-08-03) | Outputs: "Licensor claims no rights in the Output You generate" — research output distribution permitted; restricted uses (harm, discrimination, etc.) prohibited. Paid-API serving requires separate licence (not applicable to dataset generation) |
+| InstantID | [InstantX/InstantID](https://huggingface.co/InstantX/InstantID) | Hugging Face (`57b32df…`) | **Apache 2.0** (weights + code, verified 2026-08-03) | Cleanest component: permissive licence, non-gated weights (`ip-adapter.bin` + ControlNetModel) |
+| ControlNet (SDXL) | [diffusers/controlnet-canny-sdxl-1.0](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0) | Hugging Face (`eb115a1…`) | **OpenRAIL++** (verified 2026-08-03) | Same output terms as SDXL: no rights claimed in generated outputs; Attachment A restricted uses apply |
 | SDXL 1.0 (Juggernaut foundation) | [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) | Hugging Face | Stability AI Open RAIL++-M | Juggernaut-XL-v9 is a fine-tune of SDXL; underlying output-use terms apply |
 
 ## Face analysis models
@@ -53,5 +53,5 @@ upstream sources listed below under each project's own licence terms.
 
 ---
 
-*This file is part of the SFHQ-InstantID dataset release and should be
+*This file is part of the SFHQ-VirtualID dataset release and should be
 preserved with all copies of the dataset.*
