@@ -22,8 +22,8 @@ The project publishes **two complementary datasets** (see
 
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
-| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (27,593) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (67,500) + imbalanced (36,075) | Machine-unlearning benchmark (primary) |
+| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (75,000, 100/id) | General-purpose identity-conditioned faces |
 
 ## Dataset at a glance
 

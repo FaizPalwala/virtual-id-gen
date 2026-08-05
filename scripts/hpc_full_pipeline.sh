@@ -16,7 +16,7 @@
 # CPU job that exits after the last child is submitted.
 #
 #     ┌─────────────┐
-#     │  generate    │  12-GPU array (hpc_generate.sh)
+#     │  generate    │  15-GPU array (hpc_generate.sh)
 #     └──────┬──────┘
 #            │ afterok
 #     ┌──────▼──────┐
