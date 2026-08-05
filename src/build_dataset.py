@@ -164,7 +164,7 @@ def build_dataset(
     nforget: int = 40,
     forget_steps: int = 15,
     randomstate: int = 42,
-    imagesperidentity: int = 75,
+    imagesperidentity: int = 90,
     holdout_frac: float = 0.20,
     min_holdout: int = 5,
 ) -> str:
@@ -423,8 +423,8 @@ def build_imbalanced_dataset(
     min_holdout: int = 5,
     # Imbalance: train counts as ratios of the max train pool.
     # holdout is constant per identity regardless of bin.
-    imagesperidentity: int = 75,
-    candidatesperidentity: int = 85,
+    imagesperidentity: int = 90,
+    candidatesperidentity: int = 100,
     high_bin_pct: float = 0.10,
     low_bin_pct: float = 0.60,
     train_gradient_ratio: dict[str, float] | None = None,
@@ -440,7 +440,12 @@ def build_imbalanced_dataset(
     stability is uniform across all popularity tiers.
 
     Train gradient: ratios applied to ``max_train = candidatesperidentity
-    - holdout``.  Defaults give 70:40:20 (85 - 15 = 70; {1.0, 0.57, 0.29}).
+    - holdout``.  Defaults give 82:41:16 (100 - 18 = 82; {1.0, 0.50, 0.20}).
+    This 5:1 ratio is within the VGG-Face2 range (Cao et al., 2018;
+    ~10:1 max-min, 5:1 inter-quartile) and matches the real-world
+    distribution curated face training sets exhibit (Wang et al., 2019
+    "Deep Face Recognition: A Survey"; Liu et al., 2019 "Large-Scale
+    Long-Tailed Recognition in an Open World", CVPR).
     The computation scales with the candidate pool: if a future release
     generates 550 candidates/id targeting 500 images, holdout = 100 and
     max_train = 450, so the gradient re-derives train counts accordingly.
@@ -506,22 +511,25 @@ def build_imbalanced_dataset(
     # ── 3. Down-sample low- and medium-bin identities ──
     # Design choice: train counts are set as ratios of max_train_per_id
     # (candidate ceiling − per-identity holdout).  Higher bins get more
-    # train images; holdout is constant per identity.  Produces a 70:40:20
-    # train gradient with defaults (85 − 15 = 70; {1.0, 0.57, 0.29}).
+    # train images; holdout is constant per identity.  Produces an 82:41:16
+    # train gradient with defaults (100 − 18 = 82; {1.0, 0.50, 0.20}).
+    # A 5:1 ratio matches the real-world imbalance in curated face
+    # training sets (VGG-Face2, Cao et al. 2018; ~10:1 max-min,
+    # 5:1 inter-quartile; Wang et al. 2019; Liu et al. 2019, CVPR).
     # High-bin identities keep all available crops (up to the ceiling).
     # Per-identity random draws are seeded for reproducibility.
     rng_prune = np.random.RandomState(randomstate + 9998)
     if train_gradient_ratio is None:
-        train_gradient_ratio = {"high": 1.0, "medium": 0.57, "low": 0.29}
+        train_gradient_ratio = {"high": 1.0, "medium": 0.50, "low": 0.20}
     # Holdout reserve — SAME formula as the balanced release, applied per
     # identity: max(min_holdout, round(imagesperidentity × holdout_frac)).
-    # Defaults: max(5, round(75 × 0.20)) = 15 — probe stability in every tier.
+    # Defaults: max(5, round(90 × 0.20)) = 18 — probe stability in every tier.
     holdout_n = _compute_holdout_size(imagesperidentity, holdout_frac, min_holdout)
-    # Train pool = candidate ceiling minus the per-identity holdout reserve.
-    # Defaults: 85 − 15 = 70 → {1.0, 0.57, 0.29} × 70 → 70:40:20 train.
+    # higher imagesperidentity, which in turn scales train-gradients
+    # gracefully.  Defaults: 100−18=82 → {1.0, 0.50, 0.20}×82 → 82:41:16.
     max_train = max(1, candidatesperidentity - holdout_n)
     # KEPT pool per identity = train + holdout (gradient on train only;
-    # holdout carved afterwards).  Defaults: 85 / 55 / 35 kept.
+    # holdout carved afterwards).  Defaults: 100 / 59 / 34 kept.
     per_bin_images = {
         "high": round(max_train * train_gradient_ratio["high"]) + holdout_n,
         "medium": round(max_train * train_gradient_ratio["medium"]) + holdout_n,

@@ -30,7 +30,7 @@ def dataset_inputs(tmp_path):
     lighting, setting, camera) plus ``seedpath`` for cluster samples.
     """
     n_ids = 10
-    candidates_per_id = 85
+    candidates_per_id = 100
     root = tmp_path
     processed = root / "processed"
     identities = root / "identities"

@@ -1,13 +1,13 @@
 #!/bin/bash
 # ==========================================
-# hpc_generate.sh — Phase 2: Identity Generation (12-way GPU array)
+# hpc_generate.sh — Phase 2: Identity Generation (15-way GPU array)
 # ==========================================
 #SBATCH --job-name=msc_generate
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=gpu
 #SBATCH --exclusive                       # Whole node per shard — no GPU sharing
 #SBATCH --gres=gpu:1                      # Request 1 GPU (node has 4; 3 idle)
-#SBATCH --array=0-11
+#SBATCH --array=0-14
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
@@ -21,6 +21,10 @@ echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,me
 
 # ------------------------------------------------------------------
 # Each array task generates 50 identities with a unique random seed.
+# 750 identities across 15 shards (5 concurrent HPC job slots × 3 waves).
+# Seeds are pre-partitioned on the Mac into seeds/shard_00/ through
+# seeds/shard_14/ — each shard copies ONLY its own 50 seeds.  This
+# prevents the seed-reuse bug (v1.0.0 run: 397 unique seeds for 600 ids).
 #
 # Shard  0 (seed=42): identities   0– 49
 # Shard  1 (seed=44): identities  50– 99
@@ -34,6 +38,9 @@ echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,me
 # Shard  9 (seed=60): identities 450–499
 # Shard 10 (seed=62): identities 500–549
 # Shard 11 (seed=64): identities 550–599
+# Shard 12 (seed=66): identities 600–649
+# Shard 13 (seed=68): identities 650–699
+# Shard 14 (seed=70): identities 700–749
 #
 # Merge with hpc_merge.sh after all shards complete.
 # Output lands under $DATA_DIR/shard_${TASK_ID}/ for later merging.
@@ -114,8 +121,20 @@ cd "$SHARD_TMPDIR/repo/src"
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_DATA/seeds"
 
-# Source images are shared — copy once per shard
-if [ -d "$SHARD_TMPDIR/data/seeds" ]; then
+# Seeds are pre-partitioned on the Mac: seeds/shard_00/ … seeds/shard_14/.
+# Each shard copies ONLY its own 50-seed partition, guaranteeing no
+# cross-shard seed reuse (the v1.0.0 bug: all shards shared the full pool,
+# producing 397 distinct seeds for 600 identities — see CHANGELOG).
+SHARD_SEEDS="$SHARD_TMPDIR/data/seeds/shard_$(printf '%02d' ${SLURM_ARRAY_TASK_ID})"
+if [ -d "$SHARD_SEEDS" ]; then
+    mkdir -p "$SHARD_DATA/seeds"
+    cp "$SHARD_SEEDS/"*.jpg "$SHARD_DATA/seeds/"
+    echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Copied $(ls "$SHARD_DATA/seeds/"*.jpg | wc -l) seeds from shard partition"
+else
+    # Fallback — if partitioned seeds aren't available (e.g. smoke-test
+    # run), the full pool is the escape hatch (but this reintroduces the
+    # reuse bug; only for testing, never for the release run).
+    echo "[WARN]  Shard ${SLURM_ARRAY_TASK_ID}: No seed partition found at $SHARD_SEEDS; falling back to full pool (seed-reuse risk!)"
     if [ ! -d "$SHARD_DATA/seeds" ] || [ -z "$(ls -A "$SHARD_DATA/seeds" 2>/dev/null)" ]; then
         cp -r "$SHARD_TMPDIR/data/seeds/." "$SHARD_DATA/seeds/"
     fi

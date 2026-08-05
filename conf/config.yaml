@@ -3,14 +3,14 @@ defaults:
 dataset:
   dataroot: ../data
   part: 1
-  nidentities: 600
-  imagesperidentity: 75
-  candidatesperidentity: 85
+  nidentities: 750
+  imagesperidentity: 90
+  candidatesperidentity: 100
   # forget_pct × nidentities = forget identities, distributed across
   # forget_steps steps (uniform with remainder in first steps).
+  #   nidentities=750 → nforget=75 → 15 steps × 5 ids
   #   nidentities=600 → nforget=60 → 15 steps × 4 ids
   #   nidentities=400 → nforget=40 → 15 steps: 10×3 + 5×2
-  #   nidentities=100 → nforget=10 → auto-clamp to 5 steps × 2 ids
   # Minimum: nidentities ≥ 100, forget_steps ≥ 5.
   forget_pct: 0.10
   forget_steps: 15
