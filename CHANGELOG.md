@@ -78,8 +78,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   (xFormers/SDPA, VAE slicing, DPM++, text-embedding cache, CUDA auto-tune).
 - **Extract runs on 1024 candidates** before preprocessing (siblings, not
   chained) — demographics reliable, embeddings real.
-- **Relative paths** throughout manifests + release CSVs
-  (`fix_manifest_paths.py` migrates legacy absolutes).
+- **Relative paths** throughout manifests + release CSVs (legacy
+  absolute-path manifests migrated in-place).
 
 ### Fixed
 
