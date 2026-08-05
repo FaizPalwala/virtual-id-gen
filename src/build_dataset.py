@@ -423,6 +423,8 @@ def build_imbalanced_dataset(
     min_holdout: int = 5,
     # Imbalance: train counts as ratios of the max train pool.
     # holdout is constant per identity regardless of bin.
+    imagesperidentity: int = 75,
+    candidatesperidentity: int = 85,
     high_bin_pct: float = 0.10,
     low_bin_pct: float = 0.60,
     train_gradient_ratio: dict[str, float] | None = None,
@@ -433,7 +435,15 @@ def build_imbalanced_dataset(
     train + holdout.  The popularity gradient applies only to the train
     subset -- holdout is constant per identity regardless of bin.
 
-    Default train gradient ratios: {high:1.0, medium:0.57, low:0.29}.
+    Holdout per identity: ``max(min_holdout, round(imagesperidentity *
+    holdout_frac))`` — the SAME reserve as the balanced release, so probe
+    stability is uniform across all popularity tiers.
+
+    Train gradient: ratios applied to ``max_train = candidatesperidentity
+    - holdout``.  Defaults give 70:40:20 (85 - 15 = 70; {1.0, 0.57, 0.29}).
+    The computation scales with the candidate pool: if a future release
+    generates 550 candidates/id targeting 500 images, holdout = 100 and
+    max_train = 450, so the gradient re-derives train counts accordingly.
     """
     # ── 1. Read and merge manifests (same as build_dataset) ──
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
@@ -495,18 +505,27 @@ def build_imbalanced_dataset(
 
     # ── 3. Down-sample low- and medium-bin identities ──
     # Design choice: train counts are set as ratios of max_train_per_id
-    # (computed above).  Higher bins get more train images; holdout is
-    # constant per identity.  Produces a 68:39:20 gradient with defaults.
-    # gradient.  High-bin identities keep all available crops (up to 85).
+    # (candidate ceiling − per-identity holdout).  Higher bins get more
+    # train images; holdout is constant per identity.  Produces a 70:40:20
+    # train gradient with defaults (85 − 15 = 70; {1.0, 0.57, 0.29}).
+    # High-bin identities keep all available crops (up to the ceiling).
     # Per-identity random draws are seeded for reproducibility.
     rng_prune = np.random.RandomState(randomstate + 9998)
     if train_gradient_ratio is None:
         train_gradient_ratio = {"high": 1.0, "medium": 0.57, "low": 0.29}
-    max_train = 85 - _compute_holdout_size(85, holdout_frac, min_holdout)
+    # Holdout reserve — SAME formula as the balanced release, applied per
+    # identity: max(min_holdout, round(imagesperidentity × holdout_frac)).
+    # Defaults: max(5, round(75 × 0.20)) = 15 — probe stability in every tier.
+    holdout_n = _compute_holdout_size(imagesperidentity, holdout_frac, min_holdout)
+    # Train pool = candidate ceiling minus the per-identity holdout reserve.
+    # Defaults: 85 − 15 = 70 → {1.0, 0.57, 0.29} × 70 → 70:40:20 train.
+    max_train = max(1, candidatesperidentity - holdout_n)
+    # KEPT pool per identity = train + holdout (gradient on train only;
+    # holdout carved afterwards).  Defaults: 85 / 55 / 35 kept.
     per_bin_images = {
-        "high": round(max_train * train_gradient_ratio["high"]),
-        "medium": round(max_train * train_gradient_ratio["medium"]),
-        "low": round(max_train * train_gradient_ratio["low"]),
+        "high": round(max_train * train_gradient_ratio["high"]) + holdout_n,
+        "medium": round(max_train * train_gradient_ratio["medium"]) + holdout_n,
+        "low": round(max_train * train_gradient_ratio["low"]) + holdout_n,
     }
     drop_mask = pd.Series(False, index=final.index)
     for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):  # low + medium
@@ -539,10 +558,9 @@ def build_imbalanced_dataset(
     )
     imbalanced["split"] = imbalanced["identity_id"].map(split_map)
 
-    # MUFAC holdout: same per-identity reserve as balanced.
-    holdout_counts = imbalanced.groupby("identity_id").size()
-    med = int(holdout_counts.median()) if len(holdout_counts) > 0 else 15
-    holdout_n = _compute_holdout_size(max(1, med), holdout_frac, min_holdout)
+    # MUFAC holdout: carve the SAME per-identity reserve (holdout_n, computed
+    # above from imagesperidentity × holdout_frac) out of each identity's
+    # kept pool — 15/id with defaults, identical across all popularity bins.
     rng_h = np.random.RandomState(randomstate + 7777)
     for cid in imbalanced_ids:
         rows = imbalanced[imbalanced["identity_id"] == cid].index
@@ -730,11 +748,12 @@ def build_raw_dataset(
     output_df.to_parquet(parquet_path, index=False)
 
     max_balanced = int(output_df.groupby("identity_id").size().min())
+    max_per_id = int(output_df.groupby("identity_id").size().max())
     (output / "datasetsummary_raw.json").write_text(
         json.dumps({
             "total_images": len(final),
             "nidentities": len(identities),
-            "max_images_per_id": 85,
+            "max_images_per_id": max_per_id,
             "max_balanced_subset": max_balanced,
             "columns": RAW_OUTPUT_COLUMNS,
         }, indent=2)

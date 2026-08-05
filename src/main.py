@@ -116,6 +116,8 @@ def main(cfg: DictConfig) -> None:
                 cfg.dataset.seed,
                 holdout_frac,
                 min_holdout,
+                cfg.dataset.imagesperidentity,
+                cfg.dataset.candidatesperidentity,
             ),
         )
 
