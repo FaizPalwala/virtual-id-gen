@@ -228,3 +228,13 @@ bla
 data (to examine)
 logs
 smoke_gen
+
+# Local-only release tracking docs — never commit (user rule)
+Strat.md
+RELEASE_TODO.md
+
+# Hermes desktop app artifacts — never commit
+.hermes/
+
+# macOS junk
+.DS_Store
