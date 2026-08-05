@@ -23,16 +23,16 @@ size_categories:
 
 SFHQ-VirtualID is a family of **synthetic, identity-conditioned face
 datasets** built from CC0 synthetic SFHQ seed images via an InstantID +
-Juggernaut-XL-v9 + ControlNet pipeline.  Each of the 600 synthetic identities
+Juggernaut-XL-v9 + ControlNet pipeline.  Each of the 750 synthetic identities
 is a deletion unit — all images of a single identity share one identity-level
-`split` (`retain` or `forget`), and 60 identities are assigned to a
-sequential 15-step forgetting protocol (4 identities per step).
+`split` (`retain` or `forget`), and 75 identities are assigned to a
+sequential 15-step forgetting protocol (5 identities per step).
 
 **MUFAC-aligned evaluation:** every identity contributes **both** per-image
 `image_subset` values (`train` + `holdout`).  There is no identity-disjoint
 `test` split — unseen-identity test accuracy was structurally 0, and
 forgetting was previously measured on the same images used for unlearning.
-The holdout subset (15/id by default) is genuinely held out of training,
+The holdout subset (18/id by default) is genuinely held out of training,
 yielding meaningful retention, forgetting-generalisation, and forget-train
 vs forget-holdout gap metrics.
 
@@ -40,8 +40,8 @@ The project publishes **two complementary releases**:
 
 | Release | Resolution | Contents | Role |
 |---|---|---|---|
-| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (27,593) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (67,500) + imbalanced (36,075) | Machine-unlearning benchmark (primary) |
+| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (75,000, 100/id) | General-purpose identity-conditioned faces |
 
 Both Bench variants share identical `identity_id` and `split` assignments;
 the Raw release is split-free (max-size reference).  Demographics (age,
@@ -61,22 +61,22 @@ are possible and must be acknowledged.**
 
 | Property | Value |
 |---|---|
-| **Images (balanced)** | 45,000 |
-| **Identities** | 600 |
-| **Images per identity (balanced)** | 75 (60 train + 15 holdout) |
-| **Images (imbalanced)** | 27,593 |
-| **Imbalance gradient** | Ratio-based 70:40:20 train (high 60 ids / medium 180 / low 360); ratios {1.0, 0.57, 0.29} on a 70-train pool |
-| **Holdout** | 15 per identity in both variants (`max(min_holdout, round(imagesperidentity × holdout_frac))`) |
+| **Images (balanced)** | 67,500 |
+| **Identities** | 750 |
+| **Images per identity (balanced)** | 90 (72 train + 18 holdout) |
+| **Images (imbalanced)** | 36,075 |
+| **Imbalance gradient** | Ratio-based 5:1 (82:41:16 train) — high 75 ids / medium 225 / low 450; ratios {1.0, 0.50, 0.20} on an 82-train pool |
+| **Holdout** | 18 per identity in both variants (`max(min_holdout, round(imagesperidentity × holdout_frac))`) |
 | **Resolution** | 224×224 |
 | **Format** | JPEG (uint8 BGR storage) |
-| **Splits (both variants)** | Retain: 540 identities<br>Forget: 60 identities<br>(per-image `image_subset`: train + holdout within each) |
-| **Forget protocol** | 15 steps, 4 identities per step (uniform + remainder) |
+| **Splits (both variants)** | Retain: 675 identities<br>Forget: 75 identities<br>(per-image `image_subset`: train + holdout within each) |
+| **Forget protocol** | 15 steps, 5 identities per step (uniform + remainder) |
 
 ### Labels
 
 | Column | Type | Values |
 |---|---|---|
-| `identity_id` | int | 0–599 |
+| `identity_id` | int | 0–749 |
 | `age_group` | int | 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior |
 | `age` | int | Raw InsightFace age estimate |
 | `gender` | int | 0/1 (InsightFace classifier) |
@@ -118,8 +118,8 @@ The 224×224 Bench is the **primary machine-unlearning benchmark**: aligned
 crops match the ImageNet training regime of downstream ResNet-18 classifiers
 (`CROP_SIZE`, `IMAGENET_MEAN`, `IMAGENET_STD` in `src/common.py`), so
 pretrained features activate at full fidelity from epoch 1.  The imbalanced
-variant adds a ratio-based 70:40:20 popularity gradient (train only) for
-long-tail unlearning stress-testing, with a uniform 15-image holdout per
+variant adds a ratio-based 5:1 (82:41:16) popularity gradient for
+long-tail unlearning stress-testing, with a uniform 18-image holdout per
 identity so probe stability is comparable across all popularity tiers.
 
 ---
@@ -130,9 +130,9 @@ identity so probe stability is comparable across all popularity tiers.
 
 | Property | Value |
 |---|---|
-| **Images** | 51,000 |
-| **Identities** | 600 |
-| **Images per identity** | 85 (all portraits, no quality trim) |
+| **Images** | 75,000 |
+| **Identities** | 750 |
+| **Images per identity** | 100 (all portraits, no quality trim) |
 | **Resolution** | 1024×1024 |
 | **Format** | PNG |
 | **Splits** | None (max-size reference; consumers construct their own train/holdout) |
@@ -143,7 +143,7 @@ identity so probe stability is comparable across all popularity tiers.
 | Column | Type | Description |
 |---|---|---|
 | `image_path` | string | `images/identity_NNN/portrait_YYY.png` |
-| `identity_id` | int | 0–599 |
+| `identity_id` | int | 0–749 |
 | `age_group` / `age` / `gender` | int | Proxy demographics from 1024 detection |
 | `arcface_similarity` | float | Cosine similarity to identity's mean portrait embedding |
 | `pose` | string | Head/body position (from prompt) |
@@ -161,7 +161,7 @@ are meaningless on raw portraits.
 The 1024×1024 Raw release is for **general-purpose identity research**:
 identity recognition, face generation evaluation, demographic bias studies,
 and **erasure-transfer testing** (does forgetting the 224 crop also hide
-identity in the full context?).  It is not trimmed by quality gates — all 85
+identity in the full context?).  It is not trimmed by quality gates — all 100
 generated portraits per identity are included.
 
 ---
@@ -176,22 +176,22 @@ portrait dataset generated via StyleGAN2 and diffusion models.  No real-person
 photographs are used at any stage of the pipeline.
 
 **Seed selection:** CLIP feature embeddings of SFHQ images are clustered with
-KMeans, and diverse representatives are selected so the 600 identities span
+KMeans, and diverse representatives are selected so the 750 identities span
 the source appearance space rather than clumping on similar faces.
 
 ### Generation pipeline
 
 | Stage | Method | Purpose |
 |---|---|---|
-| Seed selection | CLIP + KMeans | Diverse 600-seed pool from ~90k SFHQ images |
-| Candidate generation | InstantID + Juggernaut-XL-v9 + ControlNet | 85 identity-conditioned candidates per identity |
+| Seed selection | CLIP + KMeans | Diverse 750-seed pool from ~90k SFHQ images |
+| Candidate generation | InstantID + Juggernaut-XL-v9 + ControlNet | 100 identity-conditioned candidates per identity |
 | Prompt variation | 100-prompt pool (20 compositions × 5 lighting) | Controlled non-identity variation; unique prompt per candidate |
 | **Embedding extraction** | ArcFace on 1024×1024 candidates | Identity embeddings + demographics (detection works on full portraits) |
 | Face alignment | MTCNN (`facenet-pytorch`) | Detect, align, crop faces to 224×224 |
 | Quality filtering | Laplacian variance | Discard blurry crops (< 80) |
 | Identity gating | ArcFace cosine similarity | Keep images ≥ 0.45 similarity to seed identity |
-| Split assignment | Seeded shuffle (seed 42) | Identity-level retain/forget (540/60); per-image train/holdout via `holdout_frac` |
-| Imbalance pruning | Seeded down-sample (seeds 42+9998/9999) | Ratio-based 70:40:20 train gradient ({1.0, 0.57, 0.29}) |
+| Split assignment | Seeded shuffle (seed 42) | Identity-level retain/forget (675/75); per-image train/holdout via `holdout_frac` |
+| Imbalance pruning | Seeded down-sample (seeds 42+9998/9999) | Ratio-based 5:1 (82:41:16) train gradient ({1.0, 0.50, 0.20}) |
 
 ### Model versions
 
@@ -213,8 +213,8 @@ distributed with this dataset.
 | Resolution (generation) | 1024×1024 |
 | Resolution (Bench crop) | 224×224 |
 | Random seed | 42 |
-| Shard seeds | 42, 44, …, 64 (12 shards × 50 identities) |
-| Candidates per identity | 85 |
+| Shard seeds | 42, 44, …, 70 (15 shards × 50 identities) |
+| Candidates per identity | 100 |
 | Prompt pool | 100 (20 compositions × 5 lighting) |
 
 ## Limitations

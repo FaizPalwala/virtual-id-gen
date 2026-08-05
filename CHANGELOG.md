@@ -9,31 +9,34 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 > Initial release of the full pipeline + dataset.  `main` becomes the
 > release branch with this merge; everything below is what ships in v1.0.0.
 
-### Data freeze status
+### Data freeze status (target — awaiting HPC re-run)
 
-- **Frozen artifacts** (verified, release-ready, staged in `release_v1/`):
+The v1 following a **seed-reuse bug** (post-fix analysis) has been
+redesigned: **750 identities × 100 candidates**, 5:1 train gradient.
+The fix-run is pending on Aire (see Fixed → seed partition below).
+
+- **Target artifacts** (to be built + staged after HPC re-run):
   - `SFHQ-VirtualID-Bench` — 224×224 aligned crops
-    - `dataset.csv` — balanced, **45,000** images (75/id; 60 train + 15 holdout)
-    - `dataset_imbalanced.csv` — ratio-based **70:40:20** train gradient,
-      **27,593** images (kept 85/55/35 per bin; 15 holdout/id)
-  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **51,000** images (85/id,
+    - `dataset.csv` — balanced, **67,500** images (90/id; 72 train + 18 holdout)
+    - `dataset_imbalanced.csv` — ratio-based **5:1 (82:41:16)** train gradient,
+      **36,075** images (kept 100/59/34 per bin; 18 holdout/id)
+  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **75,000** images (100/id,
     max-size, no splits)
-- All 3 release gates pass (`validate_release.py`: schema conformance,
-  split isolation, `image_subset` invariant, union orphan check, checksums).
-- Holdout is the **same per-identity reserve as the balanced release**
-  (`max(min_holdout, round(imagesperidentity × holdout_frac))` = 15/id),
-  uniform across all popularity bins — probe stability in every tier.
-- Imbalanced gradient scales with the candidate pool:
-  `max_train = candidatesperidentity − holdout` (defaults 85−15=70 → ratios
-  {1.0, 0.57, 0.29} → 70:40:20 train).
+- Holdout uniform at 18/id across all bins:
+  `max(min_holdout, round(imagesperidentity × holdout_frac))` = 18/id.
+- Train gradient = 5:1 (1.0:0.50:0.20), calibrated to the VGG-Face2 range
+  (Cao et al., 2018; Wang et al., 2019; Liu et al., 2019, CVPR).
+  `max_train = candidatesperidentity − holdout` (100−18=82 → ratios → 82:41:16 train).
+- Forget: 75 identities (10% of 750), 15 steps × 5 ids.
+- Shards: 15 (5 concurrent × 3 waves), 50 ids per shard.
 
 ### Added
 
 - **MUFAC-aligned split protocol**: every identity contributes both
   `image_subset` values (`train` + `holdout`); identity-level `split` is
-  `retain` (540) or `forget` (60); no identity-disjoint `test` split
+  `retain` (675) or `forget` (75); no identity-disjoint `test` split
   (unseen-identity accuracy was structurally 0).
-- **Sequential forgetting protocol**: 15 steps × 4 identities, uniform +
+- **Sequential forgetting protocol**: 15 steps × 5 identities, uniform +
   remainder; `forget_step` / `forget_variant` columns.
 - **Three dataset artifacts** across two releases:
   `dataset.csv` / `dataset_imbalanced.csv` (Bench 224) and
@@ -43,13 +46,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - **Confound controls**: `arcface_similarity` (per-candidate embedding,
   real within-identity spread), `laplacian_variance`, `detection_confidence`.
 - **Prompt system**: 100 unique deterministic variations (20 compositions ×
-  5 lighting), shuffled per identity, sliced to 85 candidates/id.
+  5 lighting), shuffled per identity, sliced to 100 candidates/id.
 - **Identity-conditioned generation**: InstantID + Juggernaut-XL-v9 +
   ControlNet (Canny SDXL), guidance 3.0 / ip-adapter 0.85 / 30 steps.
-- **CLIP + KMeans seed selection**: diverse 600-identity pool from ~90k
+- **CLIP + KMeans seed selection**: diverse 750-identity pool from ~90k
   SFHQ CC0 synthetic portraits (no real-person photographs).
 - **HPC pipeline scripts** (Slurm, Aire cluster, L40S GPUs):
-  `hpc_download.sh`, `hpc_generate.sh` (12-shard array × 50 ids),
+  `hpc_download.sh`, `hpc_generate.sh` (15-shard array × 50 ids),
   `hpc_merge.sh`, `hpc_extract.sh`, `hpc_preprocess.sh`, `hpc_build.sh`,
   `hpc_full_pipeline.sh` (chained with `--dependency=afterok`),
   `hpc_smoke_test.sh`, `hpc_juggernaut_sweep.sh`, `hpc_preprocess_smoke.sh`,
@@ -69,8 +72,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `SFHQ-VirtualID-Raw` (`dataset_raw.csv`, `portrait_*.png`); the imbalanced
   variant is exclusive to Bench.  `raw_arcface_similarity` dropped (never
   populated).
-- **Imbalance gradient**: absolute 85:40:20 counts → **ratio-based** on the
-  train pool (defaults 70:40:20); holdout carved per identity (15/id).
+- **Imbalance gradient**: absolute 100:59:34 counts → **ratio-based** on the
+  train pool (defaults 82:41:16); holdout carved per identity (18/id).
 - **Image naming at release**: `accepted_*` → `crop_*` (Bench),
   `candidate_*` → `portrait_*` (Raw) — consumer-facing names at release time
   only; pipeline keeps internal names.
@@ -84,7 +87,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Imbalanced holdout computed from the median per-identity count (5/id) →
-  per-identity reserve formula (15/id) — matches the approved MUFAC design.
+  per-identity reserve formula (18/id) — matches the approved MUFAC design.
 - `dataset_candidates_imbalanced` split/forget columns were unassigned
   (`KeyError` / all-zero) — fixed and verified.
 - Trial-based `(identity_id, trial)` embedding join — `arcface_similarity`

@@ -32,11 +32,11 @@ The project publishes **two complementary datasets** (see
 | **Source domain** | SFHQ (CC0 synthetic portraits) |
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
 | **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Raw, portraits) |
-| **Identities** | 600 |
-| **Images per identity** | 75 (Bench balanced) / 85 (Raw) / variable (Bench imbalanced, ratio-based gradient) |
-| **Total images** | 45,000 (Bench balanced) / 27,593 (Bench imbalanced) / 51,000 (Raw) |
-| **Splits** | Retain 540, Forget 60 identities; per-image `image_subset` (train + holdout) |
-| **Forget protocol** | 15 steps, 4 identities per step (uniform) |
+| **Identities** | 750 |
+| **Images per identity** | 90 (Bench balanced) / 100 (Raw) / variable (Bench imbalanced, ratio-based gradient) |
+| **Total images** | 67,500 (Bench balanced) / 36,075 (Bench imbalanced) / 75,000 (Raw) |
+| **Splits** | Retain 675, Forget 75 identities; per-image `image_subset` (train + holdout) |
+| **Forget protocol** | 15 steps, 5 identities per step (uniform) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
 | **Labels (imbalanced)** | plus `popularity_bin`, `images_per_identity` on the 224 variant |
 | **Metadata format** | CSV + Parquet |
@@ -89,7 +89,7 @@ flowchart TD
 | Phase | Script | Resources | Time | Description |
 |---|---|---|---|---|
 | 1. Download | `step1_download` | 1 CPU | ~5 min | Precomputed CLIP features + KMeans seed selection from SFHQ |
-| 2. Generate | `hpc_generate.sh` | 12× L40S GPU (exclusive) | ~12 hr | 600 identities (50/shard), 85 candidates each, 100 unique prompts |
+| 2. Generate | `hpc_generate.sh` | 15× L40S GPU (exclusive) | ~18 hr | 750 identities (50/shard), 100 candidates each, 100 unique prompts |
 | 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap identity IDs |
 | 4. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings + demographics on 1024×1024 candidates (detection works on full portraits) |
 | 5. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, sharpness + ArcFace gating → 224×224 crops |
@@ -107,9 +107,9 @@ four dataset pairs from a single pipeline run.
 
 | Parameter | Value | Purpose |
 |---|---|---|
-| `dataset.nidentities` | 600 | Total identity clusters |
-| `dataset.imagesperidentity` | 75 | Final images per identity |
-| `dataset.candidatesperidentity` | 85 | Candidates generated per identity |
+| `dataset.nidentities` | 750 | Total identity clusters |
+| `dataset.imagesperidentity` | 90 | Final images per identity |
+| `dataset.candidatesperidentity` | 100 | Candidates generated per identity |
 | `dataset.forget_pct` | 0.10 | Fraction of identities in forget set |
 | `dataset.forget_steps` | 15 | Unlearning steps (uniform distribution) |
 | `dataset.holdout_frac` | 0.20 | Fraction of each identity's images for holdout evaluation |
@@ -138,7 +138,7 @@ grid of unique variation prompts combines
 - 20 composition tuples (pose + expression + setting + camera lens)
 - 5 lighting treatments (window, studio, daylight, golden hour, overcast)
 
-Each identity gets a **deterministically shuffled** subset of 85 prompts from
+Each identity gets a **deterministically shuffled** subset of 100 prompts from
 the pool, seeded by the identity's cluster ID.  Every candidate in a shard
 receives a unique prompt — no two candidates share the same rendering
 instruction within an identity.
@@ -240,7 +240,7 @@ one `split` (`retain` or `forget`), and every identity contributes **both**
 `image_subset` values (`train` + `holdout`) within that split.  There is no
 identity-disjoint `test` split — the old unseen-identity test accuracy was
 structurally 0, and forgetting was measured on the same images used for
-unlearning.  Now the holdout subset (15/id by default) is genuinely held out
+unlearning.  Now the holdout subset (18/id by default) is genuinely held out
 of training, giving meaningful retention, forgetting-generalisation, and
 forget-train vs forget-holdout gap metrics (see the MUFAC design in
 `msc-project-core-implementation/.hermes/plans/dataset-split-redesign.md`).
@@ -249,21 +249,21 @@ Enforced by `validate_release.py`.
 ### `dataset_raw.csv` / `dataset_raw.parquet`
 
 Full-resolution 1024×1024 portrait dataset — the raw generation outputs
-before face alignment.  All 85 portraits per identity, no quality trim, **no
+before face alignment.  All 100 portraits per identity, no quality trim, **no
 splits** (max-size reference).  Designed as a general-purpose release for
 identity recognition, face generation evaluation, demographic bias studies,
 and erasure-transfer testing (does forgetting the 224 crop also hide
 identity in the full context?).  Researchers can construct balanced subsets
-of up to 85 images/identity with their own train/holdout splits.
+of up to 100 images/identity with their own train/holdout splits.
 
 | Column | Type | Description |
 |---|---|---|
 | `image_path` | string | Relative path: `images/identity_NNN/portrait_YYY.png` |
-| `identity_id` | int (0–599) | Synthetic identity cluster ID |
+| `identity_id` | int (0–749) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label |
 | `age` | int | Raw InsightFace age estimate |
 | `gender` | int (0/1) | InsightFace gender classifier |
-| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean portrait embedding |
+| `arcface_similarity` | float [-1,1] | Cosine similarity to identity's mean portrait embedding |
 | `pose` | string | Head/body position |
 | `expression` | string | Facial expression |
 | `lighting` | string | Lighting condition |
@@ -275,16 +275,16 @@ quality metrics and are meaningless on raw portraits.  No `split` /
 `forget_step` / `forget_variant` / `image_subset` — the Raw release is
 max-size with no split protocol; split construction is left to the consumer.
 
-The Raw release is **max-size only** (all 85 portraits per identity).  The
+The Raw release is **max-size only** (all 100 portraits per identity).  The
 imbalanced variant is exclusive to the Bench (224) release.
 
 ### Release summary (all artifacts)
 
 | Release | Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
 |---|---|---|---|---|---|---|
-| **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 (60 train + 15 holdout) | 45,000 | Dissertation unlearning benchmark |
-| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | ratio-based (70:40:20 train; +15 holdout/id) | 27,593 | Long-tail stress test |
-| **Raw** | `dataset_raw.csv/.parquet` | 1024×1024 portraits | 600 | 85 | 51,000 | General-purpose release |
+| **Bench** | `dataset.csv/.parquet` | 224×224 crops | 750 | 90 (72 train + 18 holdout) | 67,500 | Dissertation unlearning benchmark |
+| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 750 | ratio-based (82:41:16 train; +18 holdout/id) | 36,075 | Long-tail stress test |
+| **Raw** | `dataset_raw.csv/.parquet` | 1024×1024 portraits | 750 | 100 | 75,000 | General-purpose release |
 
 All three share identical `identity_id` and `split` labels (where present).
 Demographics (age, gender) are derived from detection on 1024×1024 portraits
@@ -293,19 +293,22 @@ and are real — no longer degenerate from the CPU fallback path.
 ### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
-identity pool and split assignment but prunes train images to an
-**ratio-based (70:40:20 train) gradient** across three popularity bins
-(configurable ratios; default 1.0:0.57:0.29 applied to the max train pool of
-`candidatesperidentity − holdout` = 85 − 15 = 70):
+identity pool and split assignment but prunes train images to a
+**ratio-based 5:1 train gradient** across three popularity bins,
+calibrated to the VGG-Face2 range (Cao et al., 2018; ~10:1 max-min,
+5:1 inter-quartile; Wang et al., 2019 "Deep Face Recognition: A Survey";
+Liu et al., 2019 "Large-Scale Long-Tailed Recognition in an Open World", CVPR).
+Configurable ratios — default 1.0:0.50:0.20 applied to the max train pool
+of `candidatesperidentity − holdout` = 100 − 18 = 82:
 
 | Bin | Identities | Train/ID | Holdout/ID | Total kept/ID | Total images |
 |---|---|---|---|---|---|
-| High (top 10%) | 60 | 70 | 15 | 85 | ~5,093 |
-| Medium (30%) | 180 | 40 | 15 | 55 | 9,900 |
-| Low (bottom 60%) | 360 | 20 | 15 | 35 | 12,600 |
+| High (top 10%) | 75 | 82 | 18 | 100 | 7,500 |
+| Medium (30%) | 225 | 41 | 18 | 59 | 13,275 |
+| Low (bottom 60%) | 450 | 16 | 18 | 34 | 15,300 |
 
 Holdout is the **same per-identity reserve as the balanced release**
-(`max(min_holdout, round(imagesperidentity × holdout_frac))` = 15 with
+(`max(min_holdout, round(imagesperidentity × holdout_frac))` = 18 with
 defaults), so probe stability is uniform across all popularity tiers.  The
 gradient scales with the candidate pool: if a future release generates 550
 candidates/identity targeting 500 images, holdout = 100 and max_train = 450,
