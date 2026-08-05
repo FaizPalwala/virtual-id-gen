@@ -124,6 +124,13 @@
       "pack": "buffalo_l",
       "models": ["det_10g.onnx", "w600k_r50.onnx", "genderage.onnx", "1k3d68.onnx", "2d106det.onnx"],
       "download_date": "TODO"
+    },
+    "antelopev2_mirror": {
+      "repo": "DIAMONIK7777/antelopev2",
+      "purpose": "Face analysis for InstantID generation only (scrfd_10g_bnkps.onnx detector); NOT used by embedding extraction / preprocessing (those use buffalo_l)",
+      "revision": "TODO (pin on Aire after first download)",
+      "download_date": "TODO",
+      "license": "UNVERIFIED third-party mirror of InsightFace models — do not redistribute; verify provenance before any public generation claims"
     }
   },
   "sfhq_source": {

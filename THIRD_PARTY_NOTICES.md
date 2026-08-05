@@ -39,9 +39,19 @@ upstream sources listed below under each project's own licence terms.
 
 ## Notes
 
-- **`DIAMONIK7777/antelopev2`** (InsightFace model mirror):  This project does
-  **not** use antelopev2.  All InsightFace models are loaded from the official
-  `buffalo_l` model pack via the `insightface` Python package.
+- **`DIAMONIK7777/antelopev2`** (InsightFace model mirror):  Used by the
+  **InstantID generation path only** — `instantid_adapter.py` instantiates
+  `FaceAnalysis(name="antelopev2", root=get_antelope_root(...))`, which
+  downloads the `scrfd_10g_bnkps.onnx` detector from the HF mirror on first
+  run.  The ArcFace **embedding extraction and preprocessing** paths do
+  **not** use it: `extract_embeddings.load_arcface_model` builds
+  `FaceAnalysis` with the default `buffalo_l` model pack (`w600k_r50.onnx`
+  recognition, `genderage.onnx`, detection models) from the official
+  InsightFace distribution.
+  **Licence caveat:** `DIAMONIK7777/antelopev2` is a third-party repackaging
+  of InsightFace models, not the official distribution.  We pin the
+  repository but do not redistribute its weights; users generating their own
+  datasets must verify the mirror's provenance and terms independently.
 - **Exact revisions**:  Commit hashes and download dates for each model are
   recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST.json).
 - **Upstream terms**:  Users generating their own datasets with this pipeline
