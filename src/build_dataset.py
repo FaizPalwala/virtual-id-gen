@@ -666,22 +666,22 @@ def build_imbalanced_dataset(
 # Same core as OUTPUT_COLUMNS but excludes crop-level quality metrics
 # (laplacian_variance, detection_confidence) — meaningless on 1024
 # candidates before alignment.
-CANDIDATE_OUTPUT_COLUMNS = [
+RAW_OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
     "arcface_similarity", "pose", "expression", "lighting",
     "setting", "camera",
 ]
 
 
-def build_candidates_dataset(
+def build_raw_dataset(
     identitydir: str,
     embeddingsdir: str,
     outputdir: str,
     randomstate: int = 42,
 ) -> str:
-    """Build the full-resolution 1024x1024 candidate dataset.
+    """Build the full-resolution 1024x1024 raw dataset.
 
-    Max-size reference dataset -- all 85 candidates per identity, no
+    Max-size reference dataset -- all 85 portraits per identity, no
     splits.  General-purpose release for identity recognition, face
     generation evaluation, and demographic bias studies.  Researchers
     can construct balanced subsets of up to 85 images/identity with
@@ -716,29 +716,29 @@ def build_candidates_dataset(
     output_df = final.rename(
         columns={"imagepath": "image_path", "agegroup": "age_group"}
     )
-    for col in CANDIDATE_OUTPUT_COLUMNS:
+    for col in RAW_OUTPUT_COLUMNS:
         if col not in output_df.columns:
             output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
-    output_df = output_df[CANDIDATE_OUTPUT_COLUMNS]
+    output_df = output_df[RAW_OUTPUT_COLUMNS]
     output_df["image_path"] = output_df["image_path"].apply(
         lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
-    csv_path = output / "dataset_candidates.csv"
-    parquet_path = output / "dataset_candidates.parquet"
+    csv_path = output / "dataset_raw.csv"
+    parquet_path = output / "dataset_raw.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
 
     max_balanced = int(output_df.groupby("identity_id").size().min())
-    (output / "datasetsummary_candidates.json").write_text(
+    (output / "datasetsummary_raw.json").write_text(
         json.dumps({
             "total_images": len(final),
             "nidentities": len(identities),
             "max_images_per_id": 85,
             "max_balanced_subset": max_balanced,
-            "columns": CANDIDATE_OUTPUT_COLUMNS,
+            "columns": RAW_OUTPUT_COLUMNS,
         }, indent=2)
     )
 
-    print(f"[OK] Candidates dataset: {len(final)} images across {len(identities)} identities.")
+    print(f"[OK] Raw dataset: {len(final)} images across {len(identities)} identities.")
     return str(csv_path)

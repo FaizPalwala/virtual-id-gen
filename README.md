@@ -20,7 +20,7 @@ The project publishes **two complementary datasets** (see
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
 | **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (~19,500) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Full** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
 
 ## Dataset at a glance
 
@@ -31,7 +31,7 @@ The project publishes **two complementary datasets** (see
 | **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Full, candidates) |
 | **Identities** | 600 |
 | **Images per identity** | 75 (Bench balanced) / 85 (Full) / variable (Bench imbalanced, 3-bin gradient) |
-| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Full) |
+| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Raw) |
 | **Splits** | Retain 540, Forget 60 identities; per-image `image_subset` (train + holdout) |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
@@ -76,7 +76,7 @@ flowchart TD
     D --> F[MTCNN alignment<br/>sharpness + ArcFace gating]
     E --> G[Identity-level splits<br/>retain / forget]
     F --> G
-    E --> J[dataset_candidates.csv<br/>1024x1024 release artifact]
+    E --> J[dataset_raw.csv<br/>1024x1024 release artifact]
     G --> H[dataset.csv + parquet<br/>224x224 release artifact]
     G --> I[dataset_imbalanced.csv<br/>224x224 3-bin gradient]
 ```
@@ -236,7 +236,7 @@ identity's images are split across retain/test/forget.  This is enforced by
 `validate_release.py` and must hold for any machine-unlearning evaluation to be
 valid.
 
-### `dataset_candidates.csv` / `dataset_candidates.parquet`
+### `dataset_raw.csv` / `dataset_raw.parquet`
 
 Full-resolution 1024×1024 candidate dataset — the raw generation outputs
 before face alignment.  All 85 candidates per identity, no quality trim.
@@ -265,7 +265,7 @@ context?).
 No `laplacian_variance` or `detection_confidence` — these are crop-level
 quality metrics and are meaningless on raw candidates.
 
-The Full release is **max-size only** (all 85 portraits per identity).  The
+The Raw release is **max-size only** (all 85 portraits per identity).  The
 imbalanced variant is exclusive to the Bench (224) release.  A
 columns.
 
@@ -274,8 +274,8 @@ columns.
 | Release | Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
 |---|---|---|---|---|---|---|
 | **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation unlearning benchmark |
-| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | 85:40:20 | ~19,500 | Long-tail stress test |
-| **Full** | `dataset_candidates.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
+| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | ratio-based (default ~68:39:20 train) | ~19,500 | Long-tail stress test |
+| **Full** | `dataset_raw.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
 
 All four share identical `identity_id`, `split`, `forget_step`, and
 `forget_variant` labels.  Demographics (age, gender) are derived from
@@ -285,7 +285,7 @@ from the CPU fallback path.
 ### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
-identity pool and split assignment but prunes images to an **85:40:20
+identity pool and split assignment but prunes images to an **ratio-based (default ~68:39:20 train)
 gradient** across three popularity bins (configurable ratios; default 1.0:0.57:0.29):
 
 | Bin | Identities | Images/ID | Total images |
@@ -298,7 +298,7 @@ gradient** across three popularity bins (configurable ratios; default 1.0:0.57:0
 |---|---|---|
 | ... | ... | All columns from the balanced schema (incl. gender, arcface_similarity, laplacian_variance, detection_confidence) |
 | `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
-| `images_per_identity` | int | Actual per-identity image count (up to 85, 40, or 20) |
+| `images_per_identity` | int | Actual per-identity image count (variable (configurable ratios)) |
 
 Designed for stress-testing the long tail: high-popularity identities
 (celebrities) are over-learned and hardest to forget; low-popularity identities
@@ -328,7 +328,7 @@ across the long-tail data distribution?"*  All evaluation gates use the
 | 1024×1024 candidate images (`candidates/`) | ArcFace embedding vectors |
 | `dataset.csv` + `.parquet` (224 balanced) | Seed-to-output linkage table |
 | `dataset_imbalanced.csv` + `.parquet` (224) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
-| `dataset_candidates.csv` + `.parquet` (1024) | Rejected / low-quality candidate images |
+| `dataset_raw.csv` + `.parquet` (1024) | Rejected / low-quality candidate images |
 | `datasetsummary*.json` (all variants) | |
 | `datasetsummary_candidates*.json` | |
 | Checksums (`checksums.sha256`) | |

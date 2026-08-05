@@ -121,11 +121,11 @@ def main(cfg: DictConfig) -> None:
 
         # Build full-resolution 1024×1024 candidate dataset (max-size,
         # no splits — plain embedding mapping for general-purpose release).
-        from build_dataset import build_candidates_dataset
+        from build_dataset import build_raw_dataset
 
         LOGGER.info(
-            "Candidates dataset created at %s",
-            build_candidates_dataset(
+            "Raw dataset created at %s",
+            build_raw_dataset(
                 str(root),
                 str(embeddings),
                 str(dataset),
