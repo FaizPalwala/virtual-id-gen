@@ -320,14 +320,19 @@ def validate(
         print(f"\n{len(failures)} gate failure(s).  Do not publish.", file=sys.stderr)
         return False
 
-    summary = (
-        df.groupby("split")
-        .agg(images=("image_path", "size"), identities=("identity_id", "nunique"))
-    )
+    if "split" in df.columns:
+        summary = (
+            df.groupby("split")
+            .agg(images=("image_path", "size"), identities=("identity_id", "nunique"))
+        )
+        summary_str = summary.to_string()
+    else:
+        # Raw release — no split protocol; report image_subset if present.
+        summary_str = "(no split column — Raw release)"
     print(f"Schema def:   {schema_def}")
     print(f"Images:       {len(df)}")
     print(f"Identities:   {df['identity_id'].nunique()}")
-    print(summary.to_string())
+    print(summary_str)
     print("Release QA: PASS")
     return True
 
