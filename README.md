@@ -1,9 +1,9 @@
 # SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
 
 [![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/TODO)
-[![Full on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Full-blue)](https://huggingface.co/datasets/TODO)
+[![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/TODO)
 [![Bench DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
-[![Full DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
+[![Raw DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
 [![License](https://img.shields.io/badge/License-See%20LICENSE-lightgrey)](LICENSE)
 
 A reproducible pipeline for constructing **synthetic, identity-conditioned face
@@ -19,7 +19,7 @@ The project publishes **two complementary datasets** (see
 
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
-| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (~19,500) | Machine-unlearning benchmark (primary) |
+| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (27,593) | Machine-unlearning benchmark (primary) |
 | **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
 
 ## Dataset at a glance
@@ -28,17 +28,17 @@ The project publishes **two complementary datasets** (see
 |---|---|
 | **Source domain** | SFHQ (CC0 synthetic portraits) |
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
-| **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Full, candidates) |
+| **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Raw, portraits) |
 | **Identities** | 600 |
-| **Images per identity** | 75 (Bench balanced) / 85 (Full) / variable (Bench imbalanced, 3-bin gradient) |
-| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Raw) |
+| **Images per identity** | 75 (Bench balanced) / 85 (Raw) / variable (Bench imbalanced, ratio-based gradient) |
+| **Total images** | 45,000 (Bench balanced) / 27,593 (Bench imbalanced) / 51,000 (Raw) |
 | **Splits** | Retain 540, Forget 60 identities; per-image `image_subset` (train + holdout) |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
 | **Labels (imbalanced)** | plus `popularity_bin`, `images_per_identity` on the 224 variant |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
-| **Artifacts** | 3 datasets across 2 releases: Bench (224 balanced + imbalanced), Full (1024 max-size) |
+| **Artifacts** | 3 datasets across 2 releases: Bench (224 balanced + imbalanced), Raw (1024 max-size) |
 
 ## Why this dataset?
 
@@ -209,9 +209,10 @@ for all tunables.
 | `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior. Per-image (see note below) |
 | `age` | int | Raw InsightFace age estimate. Per-image (see note below) |
 | `gender` | int (0/1) | InsightFace gender classifier output |
-| `split` | string | `retain`, `test`, or `forget` |
+| `split` | string | `retain` or `forget` — identity-level role |
 | `forget_step` | int (0–14, -1) | Unlearning step; -1 for non-forget |
 | `forget_variant` | int (0–N, -1) | Variant index within a forget step; -1 for non-forget |
+| `image_subset` | string | `train` or `holdout` — per-image role (MUFAC-aligned) |
 | `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean ArcFace embedding (confound control) |
 | `laplacian_variance` | float | Sharpness score from quality filter (quality confound control) |
 | `detection_confidence` | float | Face detector confidence (alignment quality control) |
@@ -231,31 +232,35 @@ normalise with ImageNet statistics — `CROP_SIZE`, `IMAGENET_MEAN`,
 `IMAGENET_STD` are exported from `src/common.py`.  This matches the ImageNet
 training regime so pretrained features activate at full fidelity from epoch 1.
 
-**Critical invariant:** Every `identity_id` maps to exactly one `split`.  No
-identity's images are split across retain/test/forget.  This is enforced by
-`validate_release.py` and must hold for any machine-unlearning evaluation to be
-valid.
+**Critical invariant (MUFAC-aligned):** Every `identity_id` maps to exactly
+one `split` (`retain` or `forget`), and every identity contributes **both**
+`image_subset` values (`train` + `holdout`) within that split.  There is no
+identity-disjoint `test` split — the old unseen-identity test accuracy was
+structurally 0, and forgetting was measured on the same images used for
+unlearning.  Now the holdout subset (15/id by default) is genuinely held out
+of training, giving meaningful retention, forgetting-generalisation, and
+forget-train vs forget-holdout gap metrics (see the MUFAC design in
+`msc-project-core-implementation/.hermes/plans/dataset-split-redesign.md`).
+Enforced by `validate_release.py`.
 
 ### `dataset_raw.csv` / `dataset_raw.parquet`
 
-Full-resolution 1024×1024 candidate dataset — the raw generation outputs
-before face alignment.  All 85 candidates per identity, no quality trim.
-Designed as a general-purpose release for identity recognition, face
-generation evaluation, demographic bias studies, and erasure-transfer
-testing (does forgetting the 224 crop also hide identity in the full
-context?).
+Full-resolution 1024×1024 portrait dataset — the raw generation outputs
+before face alignment.  All 85 portraits per identity, no quality trim, **no
+splits** (max-size reference).  Designed as a general-purpose release for
+identity recognition, face generation evaluation, demographic bias studies,
+and erasure-transfer testing (does forgetting the 224 crop also hide
+identity in the full context?).  Researchers can construct balanced subsets
+of up to 85 images/identity with their own train/holdout splits.
 
 | Column | Type | Description |
 |---|---|---|
-| `image_path` | string | Relative path: `identities/candidates/identity_NNN/candidate_YYY.png` |
+| `image_path` | string | Relative path: `images/identity_NNN/portrait_YYY.png` |
 | `identity_id` | int (0–599) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label |
 | `age` | int | Raw InsightFace age estimate |
 | `gender` | int (0/1) | InsightFace gender classifier |
-| `split` | string | `retain`, `test`, or `forget` |
-| `forget_step` | int | Unlearning step |
-| `forget_variant` | int | Variant index within a step |
-| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean candidate embedding |
+| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean portrait embedding |
 | `pose` | string | Head/body position |
 | `expression` | string | Facial expression |
 | `lighting` | string | Lighting condition |
@@ -263,40 +268,49 @@ context?).
 | `camera` | string | Camera angle |
 
 No `laplacian_variance` or `detection_confidence` — these are crop-level
-quality metrics and are meaningless on raw candidates.
+quality metrics and are meaningless on raw portraits.  No `split` /
+`forget_step` / `forget_variant` / `image_subset` — the Raw release is
+max-size with no split protocol; split construction is left to the consumer.
 
 The Raw release is **max-size only** (all 85 portraits per identity).  The
-imbalanced variant is exclusive to the Bench (224) release.  A
-columns.
+imbalanced variant is exclusive to the Bench (224) release.
 
 ### Release summary (all artifacts)
 
 | Release | Artifact | Resolution | Identities | Images/id | Total rows | Purpose |
 |---|---|---|---|---|---|---|
-| **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation unlearning benchmark |
-| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | ratio-based (default ~68:39:20 train) | ~19,500 | Long-tail stress test |
-| **Full** | `dataset_raw.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
+| **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 (60 train + 15 holdout) | 45,000 | Dissertation unlearning benchmark |
+| **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | ratio-based (70:40:20 train; +15 holdout/id) | 27,593 | Long-tail stress test |
+| **Raw** | `dataset_raw.csv/.parquet` | 1024×1024 portraits | 600 | 85 | 51,000 | General-purpose release |
 
-All four share identical `identity_id`, `split`, `forget_step`, and
-`forget_variant` labels.  Demographics (age, gender) are derived from
-detection on 1024×1024 candidates and are now real — no longer degenerate
-from the CPU fallback path.
+All three share identical `identity_id` and `split` labels (where present).
+Demographics (age, gender) are derived from detection on 1024×1024 portraits
+and are real — no longer degenerate from the CPU fallback path.
 
 ### `dataset_imbalanced.csv` / `dataset_imbalanced.parquet`
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
-identity pool and split assignment but prunes images to an **ratio-based (default ~68:39:20 train)
-gradient** across three popularity bins (configurable ratios; default 1.0:0.57:0.29):
+identity pool and split assignment but prunes train images to an
+**ratio-based (70:40:20 train) gradient** across three popularity bins
+(configurable ratios; default 1.0:0.57:0.29 applied to the max train pool of
+`candidatesperidentity − holdout` = 85 − 15 = 70):
 
-| Bin | Identities | Images/ID | Total images |
-|---|---|---|---|
-| High (top 10%) | 60 | up to 85 | ~5,100 |
-| Medium (30%) | 180 | 40 | 7,200 |
-| Low (bottom 60%) | 360 | 20 | 7,200 |
+| Bin | Identities | Train/ID | Holdout/ID | Total kept/ID | Total images |
+|---|---|---|---|---|---|
+| High (top 10%) | 60 | 70 | 15 | 85 | ~5,093 |
+| Medium (30%) | 180 | 40 | 15 | 55 | 9,900 |
+| Low (bottom 60%) | 360 | 20 | 15 | 35 | 12,600 |
+
+Holdout is the **same per-identity reserve as the balanced release**
+(`max(min_holdout, round(imagesperidentity × holdout_frac))` = 15 with
+defaults), so probe stability is uniform across all popularity tiers.  The
+gradient scales with the candidate pool: if a future release generates 550
+candidates/identity targeting 500 images, holdout = 100 and max_train = 450,
+and the ratios re-derive train counts (guidance §2.2).
 
 | Column | Type | Description |
 |---|---|---|
-| ... | ... | All columns from the balanced schema (incl. gender, arcface_similarity, laplacian_variance, detection_confidence) |
+| ... | ... | All columns from the balanced schema (incl. gender, arcface_similarity, laplacian_variance, detection_confidence, image_subset) |
 | `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
 | `images_per_identity` | int | Actual per-identity image count (variable (configurable ratios)) |
 

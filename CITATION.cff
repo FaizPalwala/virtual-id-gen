@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 title: "SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning"
-message: "If you use either dataset, please cite the corresponding entry below."
+message: "If you use either release in your work, please cite this dataset entry."
 type: dataset
 authors:
   - family-names: TODO
@@ -14,10 +14,12 @@ repository-code: "https://github.com/FaizPalwala/virtual-id-gen"
 abstract: >
   A family of synthetic, identity-conditioned face datasets generated via
   InstantID + Juggernaut-XL-v9 from CC0 synthetic SFHQ seed images.  600
-  synthetic identities with identity-level split isolation (retain 450 /
-  test 90 / forget 60) and a sequential 15-step forgetting protocol.  Two
-  releases: SFHQ-VirtualID-Bench (224x224 aligned crops, 45,000 balanced
-  images) and SFHQ-VirtualID-Full (1024x1024 candidates, 51,000 images).
+  synthetic identities with MUFAC-aligned split isolation (identity-level
+  retain 540 / forget 60; per-image train + holdout subsets) and a
+  sequential 15-step forgetting protocol.  Three artifacts across two
+  releases: SFHQ-VirtualID-Bench (224x224 aligned crops — 45,000 balanced
+  + 27,593 imbalanced with a ratio-based 70:40:20 train gradient) and
+  SFHQ-VirtualID-Raw (1024x1024 portraits, 51,000 images, max-size).
 keywords:
   - synthetic face dataset
   - machine unlearning
