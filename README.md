@@ -202,7 +202,7 @@ for all tunables.
 
 | Column | Type | Description |
 |---|---|---|
-| `image_path` | string | Relative path: `processed/images/identity_NNN/accepted_XXX.jpg` |
+| `image_path` | string | Relative path: `images/identity_NNN/crop_XXX.jpg` |
 | `identity_id` | int (0–599) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior. Per-image (see note below) |
 | `age` | int | Raw InsightFace age estimate. Per-image (see note below) |
@@ -308,7 +308,7 @@ bins mirrors real-world face dataset distributions.
 
 | Released ✅ | Withheld ❌ |
 |---|---|
-| Aligned 224×224 face crops (`accepted_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
+| Aligned 224×224 face crops (`crop_*.jpg`) | Raw SFHQ source images (`data/seeds/`) |
 | 1024×1024 candidate images (`candidates/`) | ArcFace embedding vectors |
 | `dataset.csv` + `.parquet` (224 balanced) | Seed-to-output linkage table |
 | `dataset_imbalanced.csv` + `.parquet` (224) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |

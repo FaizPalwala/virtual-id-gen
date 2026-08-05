@@ -34,8 +34,9 @@ DEFAULT_SIZES = {
     "bench": (224, 224),
     "full": (1024, 1024),
 }
-# candidate_* filenames are legitimate release artifacts in the Full release
-# but forbidden in Bench (raw candidates never shipped there).
+# portrait_* (full-res) and candidate_* (pipeline) filenames are legitimate
+# in the Full release but forbidden in Bench (raw/full-res images never
+# shipped there).
 FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"^/tmp/", "TMPDIR path"),
     (r"^/scratch/", "absolute scratch path"),
@@ -43,6 +44,8 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"/seeds/", "local seed image directory"),
     (r"SFHQ_pt\d_", "SFHQ seed filename in path"),
     (r"(^|/)candidate_\d{3}\.png$", "raw candidate filename in Bench release"),
+    (r"(^|/)portrait_\d{3}\.png$", "full-res portrait filename in Bench release"),
+    (r"(^|/)accepted_\d{3}\.jpg$", "raw accepted-crop filename (pipeline name) in release"),
 ]
 
 
@@ -213,11 +216,15 @@ def validate(
 
     # ---- 8. No internal paths in metadata ----
     if require_relative_paths:
-        # For Full releases, candidate_*.png is a legitimate artifact —
-        # only apply the raw-candidate check to Bench.
+        # Full releases legitimately contain portrait_*.png (and the old
+        # pipeline names candidate_*/accepted_* would also be leaks there);
+        # the raw-crop checks apply to Bench only.
         patterns = FORBIDDEN_PATH_PATTERNS
         if release_type == "full":
-            patterns = [p for p in patterns if "candidate_" not in p[0]]
+            patterns = [p for p in patterns
+                        if "candidate_" not in p[0]
+                        and "portrait_" not in p[0]
+                        and "accepted_" not in p[0]]
         for _, row in df.iterrows():
             path_str = row["image_path"]
             for pattern, label in patterns:

@@ -37,12 +37,17 @@ import pandas as pd
 def normalise_path(path_str: str, release_type: str = "bench") -> str:
     """Convert an absolute HPC path to a release-relative image path.
 
+    Pipeline-internal filenames are renamed to consumer-facing names:
+    ``accepted_XXX.jpg`` → ``crop_XXX.jpg`` (bench) and
+    ``candidate_YYY.png`` → ``portrait_YYY.png`` (full).  The numeric
+    index (quality rank / trial number) is preserved.
+
     Examples
     --------
     /scratch/kxvs0578/datagen/data/processed/images/identity_037/accepted_012.jpg
-        → images/identity_037/accepted_012.jpg   (bench)
+        → images/identity_037/crop_012.jpg   (bench)
     /scratch/kxvs0578/datagen/data/identities/candidates/identity_037/candidate_012.png
-        → images/identity_037/candidate_012.png  (full)
+        → images/identity_037/portrait_012.png  (full)
     """
     p = Path(path_str)
     parts = p.parts
@@ -57,10 +62,38 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
         raise ValueError(f"Cannot extract identity from path: {path_str}")
 
     identity_dir = parts[idx]
-    filename = parts[-1]
+    filename = rename_for_release(parts[-1], release_type)
     # The release tree stores images under images/, regardless of whether the
     # source lived under processed/images/ (bench) or identities/candidates/ (full).
     return f"images/{identity_dir}/{filename}"
+
+
+# ── Pipeline → release filename mapping ──
+# "accepted_*" (preprocess quality gate) and "candidate_*" (generate output)
+# are internal jargon; the release uses consumer-facing names.  The numeric
+# index is preserved — it encodes quality rank (bench) / trial number (full).
+_PIPELINE_TO_RELEASE = {
+    "bench": (re.compile(r"^accepted_(\d{3})\.jpg$"), "crop_{}.jpg"),
+    "full": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.png"),
+}
+_RELEASE_TO_PIPELINE = {
+    "bench": (re.compile(r"^crop_(\d{3})\.jpg$"), "accepted_{}.jpg"),
+    "full": (re.compile(r"^portrait_(\d{3})\.png$"), "candidate_{}.png"),
+}
+
+
+def rename_for_release(filename: str, release_type: str) -> str:
+    """Map a pipeline filename to its release name (identity index kept)."""
+    pattern, fmt = _PIPELINE_TO_RELEASE[release_type]
+    m = pattern.match(filename)
+    return fmt.format(m.group(1)) if m else filename
+
+
+def source_filename(release_filename: str, release_type: str) -> str:
+    """Map a release filename back to its pipeline source name (for pruning)."""
+    pattern, fmt = _RELEASE_TO_PIPELINE[release_type]
+    m = pattern.match(release_filename)
+    return fmt.format(m.group(1)) if m else release_filename
 
 
 FORBIDDEN_PATTERNS = [
@@ -71,8 +104,12 @@ FORBIDDEN_PATTERNS = [
     (r"SFHQ_pt\d_", "SFHQ seed filename"),
     (r"^\d+\.(jpg|png)$", "bare filename (not release-relative)"),
 ]
-# candidate_* filenames are legitimate in the Full release, forbidden in Bench.
-BENCH_ONLY_PATTERNS = [(r"(^|/)candidate_\d{3}\.png$", "raw candidate filename in Bench release")]
+# candidate_*/portrait_* filenames are legitimate in the Full release,
+# forbidden in Bench (raw/full-res candidates never shipped there).
+BENCH_ONLY_PATTERNS = [
+    (r"(^|/)candidate_\d{3}\.png$", "raw candidate filename in Bench release"),
+    (r"(^|/)portrait_\d{3}\.png$", "full-res portrait filename in Bench release"),
+]
 
 
 def validate_no_leaked_paths(df: pd.DataFrame, release_type: str = "bench") -> None:
@@ -138,9 +175,10 @@ def make_manifest(
     src_base = Path(source_root) if source_root else root
     missing: list[str] = []
     for path in df["image_path"]:
-        # path is images/identity_NNN/file.ext — map back to source layout
+        # path is images/identity_NNN/file.ext — map back to source layout;
+        # the source keeps its pipeline filename (accepted_*/candidate_*).
         identity_dir, filename = path.split("/", 2)[1], path.rsplit("/", 1)[1]
-        src = src_base / source_prefix / identity_dir / filename
+        src = src_base / source_prefix / identity_dir / source_filename(filename, release_type)
         if not src.is_file():
             missing.append(path)
             continue

@@ -130,7 +130,7 @@ stress-testing.
 
 | Column | Type | Description |
 |---|---|---|
-| `image_path` | string | `identities/candidates/identity_NNN/candidate_YYY.png` |
+| `image_path` | string | `images/identity_NNN/portrait_YYY.png` |
 | `identity_id` | int | 0–599 |
 | `age_group` / `age` / `gender` | int | Proxy demographics from 1024 detection |
 | `split` | string | `retain`, `test`, `forget` |
