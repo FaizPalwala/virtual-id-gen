@@ -60,8 +60,9 @@ InstantID solves both problems:
   steps (4 identities per step at constant distribution; configurable),
   modelling real-world incremental deletion requests (GDPR / CCPA).
 - **Imbalanced variant.**  A companion ``dataset_imbalanced.csv`` uses the
-  same identities but prunes images to an 85:40:20 gradient (4.25:2:1 ratio),
-  letting evaluators measure unlearning difficulty as a function of
+  same identities but prunes images to a 3-bin gradient (68:39:20 train
+  counts with default ratios; configurable), with constant holdout per bin.
+  Evaluators measure unlearning difficulty as a function of
   per-identity representation, mirroring real-world long-tail distributions.
 
 ## Pipeline
@@ -76,9 +77,8 @@ flowchart TD
     E --> G[Identity-level splits<br/>retain / forget]
     F --> G
     E --> J[dataset_candidates.csv<br/>1024x1024 release artifact]
-    J --> K[dataset_candidates_imbalanced<br/>1024x1024 85:40:20]
     G --> H[dataset.csv + parquet<br/>224x224 release artifact]
-    G --> I[dataset_imbalanced.csv<br/>224x224 85:40:20 gradient]
+    G --> I[dataset_imbalanced.csv<br/>224x224 3-bin gradient]
 ```
 
 ### Phase breakdown
@@ -90,7 +90,7 @@ flowchart TD
 | 3. Merge | `hpc_merge.sh` | 1 CPU | ~30 min | Unify shards, remap identity IDs |
 | 4. Extract | `hpc_extract.sh` | 1× GPU | ~2 hr | ArcFace embeddings + demographics on 1024×1024 candidates (detection works on full portraits) |
 | 5. Preprocess | `hpc_preprocess.sh` | 1× GPU | ~4 hr | MTCNN detect + align, sharpness + ArcFace gating → 224×224 crops |
-| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | All four artifacts: 224 balanced/imbalanced + 1024 balanced/imbalanced |
+| 6. Build | `hpc_build.sh` | 1 CPU | ~15 min | All three artifacts: 224 balanced/imbalanced + 1024 max-size |
 
 Extract runs on the 1024×1024 raw candidates (detection works on full
 portraits — it fails on tight 224 crops, which previously degraded all
@@ -109,7 +109,8 @@ four dataset pairs from a single pipeline run.
 | `dataset.candidatesperidentity` | 85 | Candidates generated per identity |
 | `dataset.forget_pct` | 0.10 | Fraction of identities in forget set |
 | `dataset.forget_steps` | 15 | Unlearning steps (uniform distribution) |
-| `dataset.test_pct` | 0.15 | Fraction of identities in test set |
+| `dataset.holdout_frac` | 0.20 | Fraction of each identity's images for holdout evaluation |
+| `dataset.min_holdout` | 5 | Minimum holdout images per identity (floor) |
 | `dataset.skip_download` | false | Skip Kaggle download if data exists locally |
 | `pipeline.instantid.base_model` | `RunDiffusion/Juggernaut-XL-v9` | Base SDXL model |
 | `pipeline.instantid.controlnet_conditioning_scale` | 0.80 | ControlNet spatial control |
@@ -264,8 +265,8 @@ context?).
 No `laplacian_variance` or `detection_confidence` — these are crop-level
 quality metrics and are meaningless on raw candidates.
 
-An imbalanced variant (`dataset_candidates_imbalanced.csv/.parquet`) applies
-the same 85:40:20 gradient, adding `popularity_bin` and `images_per_identity`
+The Full release is **max-size only** (all 85 portraits per identity).  The
+imbalanced variant is exclusive to the Bench (224) release.  A
 columns.
 
 ### Release summary (all artifacts)
@@ -275,7 +276,6 @@ columns.
 | **Bench** | `dataset.csv/.parquet` | 224×224 crops | 600 | 75 | 45,000 | Dissertation unlearning benchmark |
 | **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 600 | 85:40:20 | ~19,500 | Long-tail stress test |
 | **Full** | `dataset_candidates.csv/.parquet` | 1024×1024 candidates | 600 | 85 | 51,000 | General-purpose release |
-| **Full** | `dataset_candidates_imbalanced.csv/.parquet` | 1024×1024 candidates | 600 | 85:40:20 | ~TBD | Full-res long-tail stress test |
 
 All four share identical `identity_id`, `split`, `forget_step`, and
 `forget_variant` labels.  Demographics (age, gender) are derived from
@@ -286,7 +286,7 @@ from the CPU fallback path.
 
 An extra artifact produced alongside the balanced dataset.  Shares the same
 identity pool and split assignment but prunes images to an **85:40:20
-gradient** (4.25:2:1 ratio) across three popularity bins:
+gradient** across three popularity bins (configurable ratios; default 1.0:0.57:0.29):
 
 | Bin | Identities | Images/ID | Total images |
 |---|---|---|---|
@@ -302,8 +302,23 @@ gradient** (4.25:2:1 ratio) across three popularity bins:
 
 Designed for stress-testing the long tail: high-popularity identities
 (celebrities) are over-learned and hardest to forget; low-popularity identities
-are under-learned and easiest to scrub.  The 4.25× ratio between high and low
+are under-learned and easiest to scrub.  The ratio between high and low
 bins mirrors real-world face dataset distributions.
+
+### Imbalanced evaluation (MUFAC-aligned)
+
+The imbalanced variant answers the question: *"Does unlearning remain effective
+across the long-tail data distribution?"*  All evaluation gates use the
+**holdout** subset (never seen during training or unlearning):
+
+| Metric | Stratification | Expectation | Threshold |
+|---|---|---|---|
+| MIA AUC by popularity bin | high / medium / low | AUC near 0.50; no bin > 0.55 (mean) | All bins |
+| Forget-holdout accuracy by bin | high / medium / low | Uniformly low (=retrain oracle) in all bins | All bins |
+| Retain-holdout accuracy by bin | high / medium / low | High and stable; low-bin drop <= 5% vs high-bin | All bins |
+| Forget-train / forget-holdout gap | per method x bin | Gap <= 0.10; larger in low-bin = overfitting signal | All bins |
+| Probe identity accuracy by bin | high / medium / low | probes on holdout; directional: low-bin may be higher (less data, stronger memorisation) | Report only |
+| **Statistical test** | Kruskal-Wallis H-test | Retain p-value > 0.05 (no bin disproportionately harmed) | Retain only |
 
 ## What is released / what is not
 
@@ -314,7 +329,6 @@ bins mirrors real-world face dataset distributions.
 | `dataset.csv` + `.parquet` (224 balanced) | Seed-to-output linkage table |
 | `dataset_imbalanced.csv` + `.parquet` (224) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
 | `dataset_candidates.csv` + `.parquet` (1024) | Rejected / low-quality candidate images |
-| `dataset_candidates_imbalanced.csv` + `.parquet` | Logs, conda envs, model caches |
 | `datasetsummary*.json` (all variants) | |
 | `datasetsummary_candidates*.json` | |
 | Checksums (`checksums.sha256`) | |
