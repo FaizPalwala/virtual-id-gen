@@ -51,7 +51,7 @@
   "shard_seeds": [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64],
   "shard_count": 12,
   "identities_per_shard": 50,
-  "git_commit": "148549d",
+  "git_commit": "8882f2162175a509088335dace32d1a23661f00a",
   "generation_config": {
     "base_model": "RunDiffusion/Juggernaut-XL-v9",
     "num_inference_steps": 30,
