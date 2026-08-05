@@ -7,7 +7,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from extract_embeddings import (
-    AGE_GROUP_NAMES,
     age_to_group,
     get_embedding_and_attributes,
 )
@@ -35,7 +34,8 @@ class TestAgeToGroup:
         assert age_to_group(120) == 3
 
     def test_age_groups_cover_all_four_categories(self):
-        assert set(AGE_GROUP_NAMES.keys()) == {0, 1, 2, 3, -1}
+        # The four stable proxy classes plus the unknown (-1) sentinel.
+        assert set(age_to_group(a) for a in (-1, 0, 24, 25, 44, 45, 64, 65, 120)) == {0, 1, 2, 3, -1}
 
 
 class Face:

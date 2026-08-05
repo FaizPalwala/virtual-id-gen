@@ -397,9 +397,9 @@ Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST
   url       = {https://github.com/FaizPalwala/virtual-id-gen},
 }
 
-@dataset{sfhq_virtualid_full,
-  title     = {{SFHQ-VirtualID-Full}: Full-Resolution Synthetic
-               Identity-Conditioned Face Candidates},
+@dataset{sfhq_virtualid_raw,
+  title     = {{SFHQ-VirtualID-Raw}: Full-Resolution Synthetic
+               Identity-Conditioned Face Portraits},
   author    = {TODO},
   year      = {2026},
   version   = {1.0.0},

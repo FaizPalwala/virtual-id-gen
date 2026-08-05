@@ -9,7 +9,7 @@ tracks the documented schema for each release.
 
 Supports the SFHQ-VirtualID two-release structure:
   Bench (224x224 crops)  — schema defs: bench_balanced / bench_imbalanced
-  Full  (1024x1024 cands) — schema defs: full_balanced / full_imbalanced
+  Raw   (1024x1024 portraits) — schema def: raw
 
 Exit 0 = clean pass; exit 1 = gate failure (do not publish).
 """
