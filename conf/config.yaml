@@ -14,8 +14,10 @@ dataset:
   # Minimum: nidentities ≥ 100, forget_steps ≥ 5.
   forget_pct: 0.10
   forget_steps: 15
-  # test_pct × nidentities = test identities.
-  test_pct: 0.15
+  # fraction of each identity's images reserved for MUFAC holdout evaluation
+  holdout_frac: 0.20
+  # floor — thin datasets never get probe‑breaking holdouts
+  min_holdout: 5
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false

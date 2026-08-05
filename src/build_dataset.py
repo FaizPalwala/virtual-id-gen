@@ -25,7 +25,7 @@ from PIL import Image
 
 OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
-    "split", "forget_step", "forget_variant",
+    "split", "forget_step", "forget_variant", "image_subset",
     "arcface_similarity", "laplacian_variance", "detection_confidence",
     "pose", "expression", "lighting", "setting", "camera",
 ]
@@ -132,8 +132,29 @@ def _to_dataroot_relative(p: str, base_dir: Path, dataroot: Path) -> str:
     """
     path = Path(p)
     if path.is_absolute():
-        return str(path.relative_to(dataroot))
+        try:
+            return str(path.relative_to(dataroot))
+        except ValueError:
+            pass
+        for anchor in ("candidates", "images"):
+            parts = path.parts
+            for i, part in enumerate(parts):
+                if part == anchor:
+                    return str(Path(*parts[i:]))
+        return str(path)
     return str((base_dir / path).relative_to(dataroot))
+
+
+def _compute_holdout_size(
+    total_per_id: int, holdout_frac: float, min_holdout: int
+) -> int:
+    """Return the number of holdout images per identity.
+
+    MUFAC evaluation requires held-out probe images for every identity.
+    The holdout is split off BEFORE any cardinality-based trimming so it
+    is independent of the train set size.
+    """
+    return max(min_holdout, round(total_per_id * holdout_frac))
 
 
 def build_dataset(
@@ -141,12 +162,17 @@ def build_dataset(
     embeddingsdir: str,
     outputdir: str,
     nforget: int = 40,
-    ntest: int = 60,
     forget_steps: int = 15,
     randomstate: int = 42,
     imagesperidentity: int = 75,
+    holdout_frac: float = 0.20,
+    min_holdout: int = 5,
 ) -> str:
-    """Merge final manifest and attributes, trim to imagesperidentity per cluster."""
+    """Build the balanced 224x224 crop dataset with MUFAC-aligned splits.
+
+    Every identity contributes to both training and evaluation via the
+    ``image_subset`` column, replacing the old identity-disjoint ``test`` split.
+    """
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
 
@@ -205,18 +231,28 @@ def build_dataset(
     )
 
     identities = sorted(final["identity_id"].unique())
-    if nforget + ntest >= len(identities):
-        raise ValueError("Split sizes must leave at least one retain identity.")
+    if nforget >= len(identities):
+        raise ValueError("forget count must leave at least one retain identity.")
     rng = np.random.RandomState(randomstate)
     rng.shuffle(identities)
     forget_ids = identities[:nforget]
-    test = identities[nforget : nforget + ntest]
     split_map = (
         {identity: "forget" for identity in forget_ids}
-        | {identity: "test" for identity in test}
-        | {identity: "retain" for identity in identities[nforget + ntest :]}
+        | {identity: "retain" for identity in identities[nforget:]}
     )
     final["split"] = final["identity_id"].map(split_map)
+
+    # MUFAC-aligned per-identity holdout.
+    holdout_n = _compute_holdout_size(imagesperidentity, holdout_frac, min_holdout)
+    rng_holdout = np.random.RandomState(randomstate + 7777)
+    for cid in identities:
+        rows = final[final["identity_id"] == cid].index
+        shuffled_idx = list(rows)
+        rng_holdout.shuffle(shuffled_idx)
+        for j, idx in enumerate(shuffled_idx):
+            value = "holdout" if j < holdout_n else "train"
+            final.at[idx, "image_subset"] = value
+    final["image_subset"] = final["image_subset"].fillna("train")
 
     # Distribute forget identities across steps with uniform base + remainder.
     step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
@@ -367,6 +403,7 @@ def build_dataset(
                     key: int(value)
                     for key, value in final.groupby("split").size().items()
                 },
+                "holdout_per_id": holdout_n,
                 "columns": OUTPUT_COLUMNS,
             },
             indent=2,
@@ -380,39 +417,23 @@ def build_imbalanced_dataset(
     embeddingsdir: str,
     outputdir: str,
     nforget: int = 40,
-    ntest: int = 60,
     forget_steps: int = 15,
     randomstate: int = 42,
-    # Imbalance distribution parameters.
-    # Design choice: we down-sample low-popularity identities rather than
-    # up-sample high-popularity ones, because no extra candidate images are
-    # available (preprocess selects exactly 75/identity).  Down-sampling
-    # creates a realistic long-tail distribution without regeneration.
-    high_bin_pct: float = 0.10,    # top 10% of identities keep all 75 images
-    low_bin_pct: float = 0.60,     # bottom 60% keep only low_bin_images
-    low_bin_images: int = 20,      # prune to 20 randomly selected images
-    medium_bin_images: int = 40,   # middle 30% keep 40 images (gradient 85:40:20)
+    holdout_frac: float = 0.20,
+    min_holdout: int = 5,
+    # Imbalance: train counts as ratios of the max train pool.
+    # holdout is constant per identity regardless of bin.
+    high_bin_pct: float = 0.10,
+    low_bin_pct: float = 0.60,
+    train_gradient_ratio: dict[str, float] | None = None,
 ) -> str:
-    """Build an imbalanced variant of the dataset for unlearning stress-testing.
+    """Build the imbalanced 224x224 dataset with MUFAC-aligned splits.
 
-    Follows the same merge/split logic as :func:`build_dataset`, then
-    applies a popularity-based down-sampling to create a **4.25:2:1
-    gradient** across three bins:
+    Same ``image_subset`` design as balanced: every identity contributes
+    train + holdout.  The popularity gradient applies only to the train
+    subset -- holdout is constant per identity regardless of bin.
 
-    * High-popularity (top 10%): up to 85 images/identity (the max
-      available from generation) — over-represented, hardest to forget.
-    * Medium (next 30%): **{medium_bin_images}** images/identity — moderately
-      represented.
-    * Low-popularity (bottom 60%): {low_bin_images} images/identity — under-
-      represented, easiest to forget.
-
-    The 85 → 40 → 20 gradient mirrors real-world long-tail distributions
-    where a minority of identities (celebrities) have many images while
-    most have very few.  Downstream evaluation can plot unlearning efficacy
-    against *images_per_identity* and test for a monotonic relationship.
-
-    Output columns include ``popularity_bin`` and ``images_per_identity``
-    for per-bin analysis.
+    Default train gradient ratios: {high:1.0, medium:0.57, low:0.29}.
     """
     # ── 1. Read and merge manifests (same as build_dataset) ──
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
@@ -473,15 +494,19 @@ def build_imbalanced_dataset(
             bin_map[cid] = "medium"
 
     # ── 3. Down-sample low- and medium-bin identities ──
-    # Design choice: low-bin identities retain low_bin_images (20), medium-bin
-    # identities retain medium_bin_images (40), producing the 85:40:20
+    # Design choice: train counts are set as ratios of max_train_per_id
+    # (computed above).  Higher bins get more train images; holdout is
+    # constant per identity.  Produces a 68:39:20 gradient with defaults.
     # gradient.  High-bin identities keep all available crops (up to 85).
     # Per-identity random draws are seeded for reproducibility.
     rng_prune = np.random.RandomState(randomstate + 9998)
+    if train_gradient_ratio is None:
+        train_gradient_ratio = {"high": 1.0, "medium": 0.57, "low": 0.29}
+    max_train = 85 - _compute_holdout_size(85, holdout_frac, min_holdout)
     per_bin_images = {
-        "low": low_bin_images,
-        "medium": medium_bin_images,
-        "high": 85,  # max available from generate step
+        "high": round(max_train * train_gradient_ratio["high"]),
+        "medium": round(max_train * train_gradient_ratio["medium"]),
+        "low": round(max_train * train_gradient_ratio["low"]),
     }
     drop_mask = pd.Series(False, index=final.index)
     for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):  # low + medium
@@ -495,32 +520,38 @@ def build_imbalanced_dataset(
     imbalanced = final[~drop_mask].copy()
 
     new_sizes = imbalanced.groupby("identity_id").size()
-    for cid, expected in [(cid, low_bin_images) for cid in low_ids] + [
-        (cid, medium_bin_images)
-        for cid in set(bin_map.keys()) - high_ids - low_ids
-    ]:
+    for cid in set(bin_map.keys()) - high_ids:
+        expected = per_bin_images[bin_map[cid]]
         actual = new_sizes.get(cid, 0)
         if actual < expected * 0.5:
             raise RuntimeError(
-                f"Identity {cid} ({bin_map[cid]} bin) has {actual} images "
-                f"but expected ~{expected}"
+                f"Identity {cid} ({bin_map[cid]} bin): got {actual} < {expected * 0.5}"
             )
 
     imbalanced_ids = sorted(imbalanced["identity_id"].unique())
-    # Design choice: split assignment uses the same identity pool as balanced,
-    # only the per-ID image count differs.  This ensures the same identities
-    # are forget/test/retain in both variants, making cross-variant comparison
-    # valid.
+    # Same identity-level split as balanced.
     rng_split = np.random.RandomState(randomstate)
     rng_split.shuffle(imbalanced_ids)
     forget_ids = imbalanced_ids[:nforget]
-    test_ids = imbalanced_ids[nforget : nforget + ntest]
     split_map = (
         {cid: "forget" for cid in forget_ids}
-        | {cid: "test" for cid in test_ids}
-        | {cid: "retain" for cid in imbalanced_ids[nforget + ntest :]}
+        | {cid: "retain" for cid in imbalanced_ids[nforget:]}
     )
     imbalanced["split"] = imbalanced["identity_id"].map(split_map)
+
+    # MUFAC holdout: same per-identity reserve as balanced.
+    holdout_counts = imbalanced.groupby("identity_id").size()
+    med = int(holdout_counts.median()) if len(holdout_counts) > 0 else 15
+    holdout_n = _compute_holdout_size(max(1, med), holdout_frac, min_holdout)
+    rng_h = np.random.RandomState(randomstate + 7777)
+    for cid in imbalanced_ids:
+        rows = imbalanced[imbalanced["identity_id"] == cid].index
+        shuffled = list(rows)
+        rng_h.shuffle(shuffled)
+        n_hold = min(holdout_n, len(shuffled) - 1)
+        for j, idx in enumerate(shuffled):
+            imbalanced.at[idx, "image_subset"] = "holdout" if j < n_hold else "train"
+    imbalanced["image_subset"] = imbalanced["image_subset"].fillna("train")
 
     # Forget step distribution (same algorithm as balanced).
     step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
@@ -582,7 +613,7 @@ def build_imbalanced_dataset(
     # Summary with per-bin breakdown.
     bin_stats = imbalanced.groupby("popularity_bin").agg(
         nidentities=("identity_id", "nunique"),
-        nimages=("imagepath", "count"),
+        nimages=("identity_id", "count"),
     ).to_dict("index")
 
     (output / "datasetsummary_imbalanced.json").write_text(
@@ -591,15 +622,12 @@ def build_imbalanced_dataset(
                 "total_images": len(imbalanced),
                 "nidentities": len(imbalanced_ids),
                 "forget_pct": nforget / len(imbalanced_ids),
-                "design": (
-                    "Down-sampled to a 4.25:2:1 gradient: high up to 85 "
-                    f"images, medium {medium_bin_images} images, "
-                    f"low {low_bin_images} images."
-                ),
+                "holdout_per_id": holdout_n,
+                "gradient_ratios": train_gradient_ratio,
                 "images_per_bin": {
-                    "high": 85,
-                    "medium": medium_bin_images,
-                    "low": low_bin_images,
+                    "high": per_bin_images["high"],
+                    "medium": per_bin_images["medium"],
+                    "low": per_bin_images["low"],
                 },
                 "bin_sizes": {
                     "high_pct": high_bin_pct,
@@ -630,8 +658,7 @@ def build_imbalanced_dataset(
 
     print(f"[OK] Imbalanced dataset: {len(imbalanced)} images across "
           f"{len(imbalanced_ids)} identities — "
-          f"{n_high} high (up to 85 img), {n_medium} medium ({medium_bin_images} img), "
-          f"{n_low} low ({low_bin_images} img).")
+          f"{n_high} high, {n_medium} medium, {n_low} low.")
     return str(csv_path)
 
 
@@ -641,7 +668,6 @@ def build_imbalanced_dataset(
 # candidates before alignment.
 CANDIDATE_OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
-    "split", "forget_step", "forget_variant",
     "arcface_similarity", "pose", "expression", "lighting",
     "setting", "camera",
 ]
@@ -651,26 +677,20 @@ def build_candidates_dataset(
     identitydir: str,
     embeddingsdir: str,
     outputdir: str,
-    nforget: int = 40,
-    ntest: int = 60,
-    forget_steps: int = 15,
     randomstate: int = 42,
 ) -> str:
-    """Build the full-resolution 1024×1024 candidate dataset.
+    """Build the full-resolution 1024x1024 candidate dataset.
 
-    Reads the raw candidate manifest directly (not the processed identity
-    manifest), merges with 1024-based embeddings (identity-level join),
-    applies the same split/forget assignments as the balanced 224 dataset,
-    and outputs ``dataset_candidates.csv`` / ``.parquet``.
+    Max-size reference dataset -- all 85 candidates per identity, no
+    splits.  General-purpose release for identity recognition, face
+    generation evaluation, and demographic bias studies.  Researchers
+    can construct balanced subsets of up to 85 images/identity with
+    custom train/holdout splits.
 
-    Differs from :func:`build_dataset` in that:
-    - Images are 1024×1024 candidates, not 224×224 aligned crops
-    - No ``laplacian_variance`` or ``detection_confidence`` (crop metrics)
-    - All 85 candidates per identity are included (no quality trim)
-    - 15 output columns (vs. 17 for the standard dataset)
+    Columns: identity_id, age, gender, arcface_similarity, pose,
+    expression, lighting, setting, camera.
     """
     manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
-    # The manifest may use 'clusterid' if merged by an older script.
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
     manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
 
@@ -681,59 +701,25 @@ def build_candidates_dataset(
     attrs_merge = attributes[
         ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
     ].copy()
-
     final = candidates.merge(attrs_merge, on=["identity_id", "trial"], how="left")
 
-    # Metadata columns from the manifest.
     metadata = _load_candidate_metadata(identitydir)
     if not metadata.empty:
         final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
 
-    # ArcFace similarity for each candidate to its identity's candidate mean.
     final = _add_arcface_similarity(final)
-
     identities = sorted(final["identity_id"].unique())
-    if nforget + ntest >= len(identities):
-        raise ValueError("Split sizes must leave at least one retain identity.")
-
-    rng = np.random.RandomState(randomstate)
-    rng.shuffle(identities)
-    forget_ids = identities[:nforget]
-    test = identities[nforget : nforget + ntest]
-    split_map = (
-        {i: "forget" for i in forget_ids}
-        | {i: "test" for i in test}
-        | {i: "retain" for i in identities[nforget + ntest :]}
-    )
-    final["split"] = final["identity_id"].map(split_map)
-
-    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
-    final["forgetstep"] = (
-        final["identity_id"].map({cid: step for cid, (step, _) in step_map.items()})
-        .fillna(-1).astype(int)
-    )
-    final["forgetvariant"] = (
-        final["identity_id"].map({cid: variant for cid, (_, variant) in step_map.items()})
-        .fillna(-1).astype(int)
-    )
 
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
     dataroot = output.parent
     output_df = final.rename(
-        columns={
-            "imagepath": "image_path",
-            "agegroup": "age_group",
-            "forgetstep": "forget_step",
-            "forgetvariant": "forget_variant",
-        }
+        columns={"imagepath": "image_path", "agegroup": "age_group"}
     )
     for col in CANDIDATE_OUTPUT_COLUMNS:
         if col not in output_df.columns:
             output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
     output_df = output_df[CANDIDATE_OUTPUT_COLUMNS]
-    # Candidates manifest paths are relative to the identities dir, so base
-    # the resolver at identitydir/identities (identitydir == dataroot here).
     output_df["image_path"] = output_df["image_path"].apply(
         lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
@@ -743,174 +729,16 @@ def build_candidates_dataset(
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
 
+    max_balanced = int(output_df.groupby("identity_id").size().min())
     (output / "datasetsummary_candidates.json").write_text(
         json.dumps({
             "total_images": len(final),
             "nidentities": len(identities),
-            "nforget_ids": nforget,
-            "forget_steps": forget_steps,
-            "forget_pct": nforget / len(identities),
-            "split_sizes": {k: int(v) for k, v in final.groupby("split").size().items()},
+            "max_images_per_id": 85,
+            "max_balanced_subset": max_balanced,
             "columns": CANDIDATE_OUTPUT_COLUMNS,
         }, indent=2)
     )
 
     print(f"[OK] Candidates dataset: {len(final)} images across {len(identities)} identities.")
-    return str(csv_path)
-
-
-def build_candidates_imbalanced(
-    identitydir: str,
-    embeddingsdir: str,
-    outputdir: str,
-    nforget: int = 40,
-    ntest: int = 60,
-    forget_steps: int = 15,
-    randomstate: int = 42,
-    high_bin_pct: float = 0.10,
-    low_bin_pct: float = 0.60,
-    low_bin_images: int = 20,
-    medium_bin_images: int = 40,
-) -> str:
-    """Imbalanced variant of the full-resolution candidate dataset.
-
-    Same 85:40:20 gradient as the 224 imbalanced, applied to the candidate
-    pool.  Shares ``identity_id``, ``split``, and forget assignments with
-    the balanced candidates dataset.
-    """
-    manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
-    id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
-    manifest.rename(columns={id_col: "identity_id", "raw_candidatepath": "imagepath"}, inplace=True)
-
-    candidates = manifest[["imagepath", "identity_id", "trial"]].copy()
-    candidates.drop_duplicates(inplace=True)
-
-    attributes = _load_attributes(embeddingsdir)
-    attrs_merge = attributes[
-        ["identity_id", "trial", "agegroup", "age", "gender", "embedding"]
-    ].copy()
-
-    final = candidates.merge(attrs_merge, on=["identity_id", "trial"], how="left")
-
-    metadata = _load_candidate_metadata(identitydir)
-    if not metadata.empty:
-        final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
-
-    final = _add_arcface_similarity(final)
-
-    identities = sorted(final["identity_id"].unique())
-
-    # Popularity bins (same algorithm as imbalanced crops).
-    rng = np.random.RandomState(randomstate + 9999)
-    shuffled = identities.copy()
-    rng.shuffle(shuffled)
-    n_high = max(1, int(len(shuffled) * high_bin_pct))
-    n_low = max(1, int(len(shuffled) * low_bin_pct))
-    n_medium = len(shuffled) - n_high - n_low
-    high_ids = set(shuffled[:n_high])
-    low_ids = set(shuffled[-n_low:])
-    bin_map = {}
-    for cid in shuffled:
-        bin_map[cid] = "high" if cid in high_ids else ("low" if cid in low_ids else "medium")
-
-    rng_prune = np.random.RandomState(randomstate + 9998)
-    per_bin_images = {"low": low_bin_images, "medium": medium_bin_images, "high": 85}
-    drop_mask = pd.Series(False, index=final.index)
-    for cid in low_ids | (set(bin_map.keys()) - high_ids - low_ids):
-        target = per_bin_images[bin_map[cid]]
-        rows = final[final["identity_id"] == cid]
-        n_keep = min(target, len(rows))
-        keep_idx = set(rng_prune.choice(rows.index, n_keep, replace=False))
-        drop_mask.loc[list(set(rows.index) - keep_idx)] = True
-    imbalanced = final[~drop_mask].copy()
-
-    # Add popularity annotation columns (same as build_imbalanced_dataset).
-    imbalanced["popularity_bin"] = imbalanced["identity_id"].map(bin_map)
-    id_counts = imbalanced.groupby("identity_id").size()
-    imbalanced["images_per_identity"] = imbalanced["identity_id"].map(id_counts)
-
-    # ── Split + forget assignment (MUST match the other three artifacts) ──
-    # Design choice: identical algorithm and seed to build_dataset /
-    # build_candidates_dataset / build_imbalanced_dataset — same identity
-    # pool, same randomstate — so the same identities are forget/test/retain
-    # in all four artifacts.  Cross-variant comparison (balanced vs
-    # imbalanced, 224 vs 1024) is only valid if split membership is
-    # invariant; this block guarantees it.
-    imbalanced_ids = sorted(imbalanced["identity_id"].unique())
-    if nforget + ntest >= len(imbalanced_ids):
-        raise ValueError("Split sizes must leave at least one retain identity.")
-    rng_split = np.random.RandomState(randomstate)
-    rng_split.shuffle(imbalanced_ids)
-    forget_ids = imbalanced_ids[:nforget]
-    test_ids = imbalanced_ids[nforget : nforget + ntest]
-    split_map = (
-        {cid: "forget" for cid in forget_ids}
-        | {cid: "test" for cid in test_ids}
-        | {cid: "retain" for cid in imbalanced_ids[nforget + ntest :]}
-    )
-    imbalanced["split"] = imbalanced["identity_id"].map(split_map)
-
-    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
-    imbalanced["forgetstep"] = (
-        imbalanced["identity_id"].map(
-            {cid: step for cid, (step, _) in step_map.items()}
-        )
-        .fillna(-1)
-        .astype(int)
-    )
-    imbalanced["forgetvariant"] = (
-        imbalanced["identity_id"].map(
-            {cid: variant for cid, (_, variant) in step_map.items()}
-        )
-        .fillna(-1)
-        .astype(int)
-    )
-
-    output_columns = CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
-    output = Path(outputdir)
-    output.mkdir(parents=True, exist_ok=True)
-    dataroot = output.parent
-    output_df = imbalanced.rename(
-        columns={
-            "imagepath": "image_path",
-            "agegroup": "age_group",
-            "forgetstep": "forget_step",
-            "forgetvariant": "forget_variant",
-        }
-    )
-    for col in CANDIDATE_OUTPUT_COLUMNS:
-        if col not in output_df.columns:
-            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
-    output_df = output_df[output_columns]
-    output_df["image_path"] = output_df["image_path"].apply(
-        lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
-    )
-
-    csv_path = output / "dataset_candidates_imbalanced.csv"
-    parquet_path = output / "dataset_candidates_imbalanced.parquet"
-    output_df.to_csv(csv_path, index=False)
-    output_df.to_parquet(parquet_path, index=False)
-
-    bin_stats = imbalanced.groupby("popularity_bin").agg(
-        nidentities=("identity_id", "nunique"),
-        nimages=("imagepath", "count"),
-    ).to_dict("index")
-
-    (output / "datasetsummary_candidates_imbalanced.json").write_text(
-        json.dumps({
-            "total_images": len(imbalanced),
-            "nidentities": len(identities),
-            "forget_pct": nforget / len(identities),
-            "images_per_bin": {"high": 85, "medium": medium_bin_images, "low": low_bin_images},
-            "bin_sizes": {"high_pct": high_bin_pct, "low_pct": low_bin_pct,
-                          "n_high": n_high, "n_medium": n_medium, "n_low": n_low},
-            "per_bin": {bin: {"identities": s["nidentities"], "images": s["nimages"]}
-                        for bin, s in bin_stats.items()},
-            "columns": CANDIDATE_OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"],
-        }, indent=2)
-    )
-
-    print(f"[OK] Candidates imbalanced: {len(imbalanced)} images across "
-          f"{len(identities)} identities — "
-          f"{n_high} high, {n_medium} medium, {n_low} low.")
     return str(csv_path)

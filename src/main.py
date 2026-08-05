@@ -16,15 +16,16 @@ def main(cfg: DictConfig) -> None:
     forget_pct = cfg.dataset.forget_pct
 
     nforget = int(nidentities * forget_pct)
-    ntest = int(nidentities * cfg.dataset.test_pct)
+    holdout_frac = cfg.dataset.holdout_frac
+    min_holdout = cfg.dataset.min_holdout
 
     # Clamp: every step must have ≥ 1 identity.
     if nforget < forget_steps:
         forget_steps = max(5, nforget)
 
-    if nforget + ntest >= nidentities:
+    if nforget >= nidentities:
         raise ValueError(
-            f"forget ({nforget}) + test ({ntest}) >= nidentities ({nidentities})"
+            f"forget ({nforget}) >= nidentities ({nidentities})"
         )
 
     # Minimum size guards for download and build (generate handles sharding).
@@ -93,10 +94,11 @@ def main(cfg: DictConfig) -> None:
                 str(embeddings),
                 str(dataset),
                 nforget,
-                ntest,
                 forget_steps,
                 cfg.dataset.seed,
                 cfg.dataset.imagesperidentity,
+                holdout_frac,
+                min_holdout,
             ),
         )
 
@@ -110,17 +112,16 @@ def main(cfg: DictConfig) -> None:
                 str(embeddings),
                 str(dataset),
                 nforget,
-                ntest,
                 forget_steps,
                 cfg.dataset.seed,
+                holdout_frac,
+                min_holdout,
             ),
         )
 
-        # Build full-resolution 1024×1024 candidate datasets.
-        from build_dataset import (
-            build_candidates_dataset,
-            build_candidates_imbalanced,
-        )
+        # Build full-resolution 1024×1024 candidate dataset (max-size,
+        # no splits — plain embedding mapping for general-purpose release).
+        from build_dataset import build_candidates_dataset
 
         LOGGER.info(
             "Candidates dataset created at %s",
@@ -128,21 +129,6 @@ def main(cfg: DictConfig) -> None:
                 str(root),
                 str(embeddings),
                 str(dataset),
-                nforget,
-                ntest,
-                forget_steps,
-                cfg.dataset.seed,
-            ),
-        )
-        LOGGER.info(
-            "Candidates imbalanced dataset created at %s",
-            build_candidates_imbalanced(
-                str(root),
-                str(embeddings),
-                str(dataset),
-                nforget,
-                ntest,
-                forget_steps,
                 cfg.dataset.seed,
             ),
         )
