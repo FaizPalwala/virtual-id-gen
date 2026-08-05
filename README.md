@@ -1,5 +1,8 @@
 # SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
 
+> **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
+> (dev → main) release summary.
+
 [![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/TODO)
 [![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/TODO)
 [![Bench DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
@@ -344,7 +347,7 @@ across the long-tail data distribution?"*  All evaluation gates use the
 | `dataset_imbalanced.csv` + `.parquet` (224) | Juggernaut-XL-v9 / InstantID / ControlNet / InsightFace model weights |
 | `dataset_raw.csv` + `.parquet` (1024) | Rejected / low-quality candidate images |
 | `datasetsummary*.json` (all variants) | |
-| `datasetsummary_candidates*.json` | |
+| `datasetsummary_raw.json` | |
 | Checksums (`checksums.sha256`) | |
 | Schema (`schema.json`) | |
 | Release manifest (`RELEASE_MANIFEST.json`) | |
