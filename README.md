@@ -9,9 +9,10 @@
 A reproducible pipeline for constructing **synthetic, identity-conditioned face
 clusters** from CC0 synthetic seed images, designed as a benchmark for
 **machine unlearning**.  Each identity cluster is a deletion unit — all images
-of one synthetic identity share a split (`retain` / `test` / `forget`),
-preventing identity leakage across training, evaluation, and sequential
-deletion schedules.
+of one synthetic identity share a split (`retain` / `forget`) and a
+per-image `image_subset` (`train` / `holdout`).  Every identity
+contributes images to both training and evaluation — no identity-level
+test split that would make test accuracy structurally degenerate.
 
 The project publishes **two complementary datasets** (see
 [`DATASET_CARD.md`](DATASET_CARD.md)):
@@ -19,7 +20,7 @@ The project publishes **two complementary datasets** (see
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
 | **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (45,000) + imbalanced (~19,500) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Full** | 1024×1024 candidates | Balanced (51,000) + imbalanced (~TBD) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Full** | 1024×1024 portraits | Max-size (51,000, 85/id) | General-purpose identity-conditioned faces |
 
 ## Dataset at a glance
 
@@ -29,15 +30,15 @@ The project publishes **two complementary datasets** (see
 | **Generation method** | InstantID + Juggernaut-XL-v9 + ControlNet |
 | **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Full, candidates) |
 | **Identities** | 600 |
-| **Images per identity** | 75 (Bench balanced) / 85 (Full candidates) / 85:40:20 gradient (imbalanced) |
-| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Full balanced) / ~TBD (Full imbalanced) |
-| **Splits** | Retain 450, Test 90, Forget 60 identities |
+| **Images per identity** | 75 (Bench balanced) / 85 (Full) / variable (Bench imbalanced, 3-bin gradient) |
+| **Total images** | 45,000 (Bench balanced) / ~19,500 (Bench imbalanced) / 51,000 (Full) |
+| **Splits** | Retain 540, Forget 60 identities; per-image `image_subset` (train + holdout) |
 | **Forget protocol** | 15 steps, 4 identities per step (uniform) |
-| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
-| **Labels (imbalanced)** | ...plus `popularity_bin`, `images_per_identity` |
+| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
+| **Labels (imbalanced)** | plus `popularity_bin`, `images_per_identity` on the 224 variant |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
-| **Artifacts** | 4 dataset pairs across 2 releases: Bench (224 balanced + imbalanced), Full (1024 balanced + imbalanced) |
+| **Artifacts** | 3 datasets across 2 releases: Bench (224 balanced + imbalanced), Full (1024 max-size) |
 
 ## Why this dataset?
 
@@ -52,7 +53,7 @@ InstantID solves both problems:
   not claim the images are "anonymous" or "privacy-safe"; synthetic does not
   mean risk-free, and residual likeness or memorisation is possible.
 - **Identity clusters are deletion units.**  All 75 images of identity 37 share
-  the same `identity_id`, the same `split`, and (if in `forget`) the same
+  the same `identity_id`, the same `split`, and (if `forget`) the same
   `forget_step`.  An unlearning system must genuinely erase a *person* rather
   than scattered pixels.
 - **Sequential forget protocol.**  60 identity clusters are deleted over 15
@@ -72,7 +73,7 @@ flowchart TD
     C --> D[Merge 12-GPU shards]
     D --> E[ArcFace extraction on<br/>1024x1024 candidates]
     D --> F[MTCNN alignment<br/>sharpness + ArcFace gating]
-    E --> G[Identity-level splits<br/>retain / test / forget]
+    E --> G[Identity-level splits<br/>retain / forget]
     F --> G
     E --> J[dataset_candidates.csv<br/>1024x1024 release artifact]
     J --> K[dataset_candidates_imbalanced<br/>1024x1024 85:40:20]
