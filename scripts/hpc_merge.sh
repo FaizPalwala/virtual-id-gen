@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================
-# hpc_merge.sh — Merge 12 shard outputs into unified identities/
+# hpc_merge.sh — Merge 15 shard outputs into unified identities/
 # ==========================================
 #SBATCH --job-name=msc_merge
 #SBATCH --time=00:30:00
@@ -10,7 +10,7 @@
 #SBATCH --error=logs/%x_%j.err
 
 # ------------------------------------------------------------------
-# Reads $DATA_DIR/shard_{0..11}/ and writes:
+# Reads $DATA_DIR/shard_{0..14}/ and writes:
 #   $DATA_DIR/identities/raw_candidate_manifest.csv
 #   $DATA_DIR/identities/candidates/
 #
@@ -31,7 +31,7 @@ REPO_DIR="$SLURM_SUBMIT_DIR"
 PARENT_DIR=$(dirname "$REPO_DIR")
 DATA_DIR="/scratch/$USER/datagen/data"
 
-SHARD_COUNT=12
+SHARD_COUNT=15
 IDENTITIES_PER_SHARD=50
 
 # ==========================================
