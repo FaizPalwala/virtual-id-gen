@@ -1,253 +1,87 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SFHQ-VirtualID Dataset Schemas",
-  "description": "Schemas for the SFHQ-VirtualID releases: Bench (224x224 aligned crops) and Full (1024x1024 candidates), each with balanced + imbalanced variants.",
+  "description": "Schemas for the SFHQ-VirtualID releases: Bench (224x224 aligned crops, balanced + imbalanced) and Raw (1024x1024 portraits, max-size).",
   "type": "object",
   "definitions": {
     "bench_balanced": {
       "type": "object",
-      "description": "dataset.csv / dataset.parquet \u2014 SFHQ-VirtualID-Bench balanced (224x224 crops)",
+      "description": "dataset.csv / dataset.parquet — SFHQ-VirtualID-Bench balanced (224x224 crops, MUFAC-aligned splits)",
       "properties": {
         "image_path": {
           "type": "string",
           "description": "Release-relative path to the 224x224 face crop, e.g. images/identity_037/crop_012.jpg",
           "pattern": "^(processed/)?images/identity_\\d{3}/crop_\\d{3}\\.jpg$"
         },
-        "identity_id": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 599
-        },
-        "age_group": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 3
-        },
-        "age": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 120
-        },
-        "gender": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "split": {
-          "type": "string",
-          "enum": [
-            "retain",
-            "test",
-            "forget"
-          ]
-        },
-        "forget_step": {
-          "type": "integer",
-          "minimum": -1,
-          "maximum": 14
-        },
-        "forget_variant": {
-          "type": "integer",
-          "minimum": -1,
-          "maximum": 99
-        },
-        "arcface_similarity": {
-          "type": "number",
-          "minimum": 0.0,
-          "maximum": 1.0
-        },
-        "laplacian_variance": {
-          "type": "number",
-          "minimum": 0.0
-        },
-        "detection_confidence": {
-          "type": "number",
-          "minimum": 0.0,
-          "maximum": 1.0
-        },
-        "pose": {
-          "type": "string"
-        },
-        "expression": {
-          "type": "string"
-        },
-        "lighting": {
-          "type": "string"
-        },
-        "setting": {
-          "type": "string"
-        },
-        "camera": {
-          "type": "string"
-        }
+        "identity_id": {"type": "integer", "minimum": 0, "maximum": 599},
+        "age_group": {"type": "integer", "minimum": 0, "maximum": 3},
+        "age": {"type": "integer", "minimum": 0, "maximum": 120},
+        "gender": {"type": "integer", "minimum": 0, "maximum": 1},
+        "split": {"type": "string", "enum": ["retain", "forget"]},
+        "forget_step": {"type": "integer", "minimum": -1, "maximum": 14},
+        "forget_variant": {"type": "integer", "minimum": -1, "maximum": 99},
+        "image_subset": {"type": "string", "enum": ["train", "holdout"]},
+        "arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "laplacian_variance": {"type": "number", "minimum": 0.0},
+        "detection_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "pose": {"type": "string"},
+        "expression": {"type": "string"},
+        "lighting": {"type": "string"},
+        "setting": {"type": "string"},
+        "camera": {"type": "string"}
       },
       "required": [
-        "image_path",
-        "identity_id",
-        "age_group",
-        "age",
-        "gender",
-        "split",
-        "forget_step",
-        "forget_variant",
-        "arcface_similarity",
-        "laplacian_variance",
-        "detection_confidence",
-        "pose",
-        "expression",
-        "lighting",
-        "setting",
-        "camera"
+        "image_path", "identity_id", "age_group", "age", "gender",
+        "split", "forget_step", "forget_variant", "image_subset",
+        "arcface_similarity", "laplacian_variance", "detection_confidence",
+        "pose", "expression", "lighting", "setting", "camera"
       ],
       "additionalProperties": false
     },
     "bench_imbalanced": {
       "type": "object",
-      "description": "dataset_imbalanced.csv / .parquet \u2014 SFHQ-VirtualID-Bench imbalanced (85:40:20 gradient)",
-      "allOf": [
-        {
-          "$ref": "#/definitions/bench_balanced"
-        }
-      ],
+      "description": "dataset_imbalanced.csv / .parquet — SFHQ-VirtualID-Bench imbalanced (ratio-based 70:40:20 train gradient)",
+      "allOf": [{"$ref": "#/definitions/bench_balanced"}],
       "properties": {
-        "popularity_bin": {
-          "type": "string",
-          "enum": [
-            "high",
-            "medium",
-            "low"
-          ]
-        },
-        "images_per_identity": {
-          "type": "integer",
-          "minimum": 1
-        }
+        "popularity_bin": {"type": "string", "enum": ["high", "medium", "low"]},
+        "images_per_identity": {"type": "integer", "minimum": 1}
       },
-      "required": [
-        "popularity_bin",
-        "images_per_identity"
-      ]
+      "required": ["popularity_bin", "images_per_identity"]
     },
-    "full_balanced": {
+    "raw": {
       "type": "object",
-      "description": "dataset_candidates.csv / .parquet \u2014 SFHQ-VirtualID-Full balanced (1024x1024 candidates)",
+      "description": "dataset_raw.csv / .parquet — SFHQ-VirtualID-Raw (1024x1024 max-size portraits, no splits)",
       "properties": {
         "image_path": {
           "type": "string",
           "description": "Release-relative path to the 1024x1024 portrait, e.g. images/identity_037/portrait_012.png",
           "pattern": "^images/identity_\\d{3}/portrait_\\d{3}\\.png$"
         },
-        "identity_id": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 599
-        },
-        "age_group": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 3
-        },
-        "age": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 120
-        },
-        "gender": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "split": {
-          "type": "string",
-          "enum": [
-            "retain",
-            "test",
-            "forget"
-          ]
-        },
-        "forget_step": {
-          "type": "integer",
-          "minimum": -1,
-          "maximum": 14
-        },
-        "forget_variant": {
-          "type": "integer",
-          "minimum": -1,
-          "maximum": 99
-        },
-        "arcface_similarity": {
-          "type": "number",
-          "minimum": 0.0,
-          "maximum": 1.0
-        },
-        "pose": {
-          "type": "string"
-        },
-        "expression": {
-          "type": "string"
-        },
-        "lighting": {
-          "type": "string"
-        },
-        "setting": {
-          "type": "string"
-        },
-        "camera": {
-          "type": "string"
-        }
+        "identity_id": {"type": "integer", "minimum": 0, "maximum": 599},
+        "age_group": {"type": "integer", "minimum": 0, "maximum": 3},
+        "age": {"type": "integer", "minimum": 0, "maximum": 120},
+        "gender": {"type": "integer", "minimum": 0, "maximum": 1},
+        "arcface_similarity": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "pose": {"type": "string"},
+        "expression": {"type": "string"},
+        "lighting": {"type": "string"},
+        "setting": {"type": "string"},
+        "camera": {"type": "string"}
       },
       "required": [
-        "image_path",
-        "identity_id",
-        "age_group",
-        "age",
-        "gender",
-        "split",
-        "forget_step",
-        "forget_variant",
-        "arcface_similarity",
-        "pose",
-        "expression",
-        "lighting",
-        "setting",
-        "camera"
+        "image_path", "identity_id", "age_group", "age", "gender",
+        "arcface_similarity", "pose", "expression", "lighting",
+        "setting", "camera"
       ],
       "additionalProperties": false
-    },
-    "full_imbalanced": {
-      "type": "object",
-      "description": "dataset_candidates_imbalanced.csv / .parquet \u2014 SFHQ-VirtualID-Full imbalanced",
-      "allOf": [
-        {
-          "$ref": "#/definitions/full_balanced"
-        }
-      ],
-      "properties": {
-        "popularity_bin": {
-          "type": "string",
-          "enum": [
-            "high",
-            "medium",
-            "low"
-          ]
-        },
-        "images_per_identity": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "required": [
-        "popularity_bin",
-        "images_per_identity"
-      ]
     }
   },
   "notes": {
     "image_size": {
       "bench": "224x224 uint8 BGR JPEG (crop_XXX.jpg)",
-      "full": "1024x1024 PNG (portrait_YYY.png)"
+      "raw": "1024x1024 PNG (portrait_YYY.png)"
     },
-    "shared_invariant": "Every identity_id maps to exactly one split across ALL four artifacts.",
+    "shared_invariant": "Every identity_id maps to exactly one split (retain|forget); every identity contributes both image_subset values (train|holdout) in the Bench releases. Raw has no splits.",
     "pruning": "Release ships only images referenced by at least one CSV in the release (union of balanced + imbalanced); orphans on disk are excluded."
   }
 }

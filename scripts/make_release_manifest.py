@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Rewrite dataset CSV paths from absolute/HPC paths to release-relative paths.
 
-Reads a dataset CSV (dataset.csv, dataset_imbalanced.csv, dataset_candidates.csv,
-or dataset_candidates_imbalanced.csv) produced by the HPC pipeline, rewrites
-every ``image_path`` to a release-relative path of the form
-``images/identity_NNN/accepted_XXX.jpg`` (Bench) or
-``images/identity_NNN/candidate_YYY.png`` (Full), and writes the result back.
+Reads a dataset CSV (dataset.csv, dataset_imbalanced.csv, or
+dataset_raw.csv) produced by the HPC pipeline, rewrites every ``image_path``
+to a release-relative path of the form ``images/identity_NNN/crop_XXX.jpg``
+(Bench) or ``images/identity_NNN/portrait_YYY.png`` (Raw), and writes the
+result back.
 
 Also validates that no stale ``/tmp/``, ``/home/``, ``seeds/``, or seed
 filenames remain in the published metadata — exits non-zero if any are found.
 
 Pruning (--prune-images --source-root): copies only the images referenced by
 the CSV from the source tree into the release image root, so orphan
-crops/candidates never ship.  Run once per CSV with the same release root and
+crops/portraits never ship.  Run once per CSV with the same release root and
 the union of referenced images is materialised.
 
 Example:
@@ -64,21 +64,21 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
     identity_dir = parts[idx]
     filename = rename_for_release(parts[-1], release_type)
     # The release tree stores images under images/, regardless of whether the
-    # source lived under processed/images/ (bench) or identities/candidates/ (full).
+    # source lived under processed/images/ (bench) or identities/candidates/ (raw).
     return f"images/{identity_dir}/{filename}"
 
 
 # ── Pipeline → release filename mapping ──
 # "accepted_*" (preprocess quality gate) and "candidate_*" (generate output)
 # are internal jargon; the release uses consumer-facing names.  The numeric
-# index is preserved — it encodes quality rank (bench) / trial number (full).
+# index is preserved — it encodes quality rank (bench) / trial number (raw).
 _PIPELINE_TO_RELEASE = {
     "bench": (re.compile(r"^accepted_(\d{3})\.jpg$"), "crop_{}.jpg"),
-    "full": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.png"),
+    "raw": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.png"),
 }
 _RELEASE_TO_PIPELINE = {
     "bench": (re.compile(r"^crop_(\d{3})\.jpg$"), "accepted_{}.jpg"),
-    "full": (re.compile(r"^portrait_(\d{3})\.png$"), "candidate_{}.png"),
+    "raw": (re.compile(r"^portrait_(\d{3})\.png$"), "candidate_{}.png"),
 }
 
 
@@ -168,7 +168,7 @@ def make_manifest(
     # path from the release type so --source-root points at the data root.
     source_prefix = {
         "bench": "processed/images",
-        "full": "identities/candidates",
+        "raw": "identities/candidates",
     }[release_type]
 
     root = Path(image_root)
@@ -221,8 +221,8 @@ def main() -> None:
     parser.add_argument(
         "--release-type",
         default="bench",
-        choices=["bench", "full"],
-        help="bench (224 crops) or full (1024 candidates) — controls path checks",
+        choices=["bench", "raw"],
+        help="bench (224 crops) or raw (1024 portraits) — controls path checks",
     )
     parser.add_argument(
         "--prune-images",

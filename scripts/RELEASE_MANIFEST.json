@@ -10,48 +10,48 @@
       "format": "JPEG",
       "artifacts": {
         "dataset.csv/.parquet": {
-          "description": "Balanced aligned crops",
+          "description": "Balanced aligned crops (MUFAC-aligned splits)",
           "images": 45000,
-          "images_per_identity": 75
+          "images_per_identity": 75,
+          "train_per_identity": 60,
+          "holdout_per_identity": 15
         },
         "dataset_imbalanced.csv/.parquet": {
-          "description": "85:40:20 gradient crops",
-          "images": "~19500",
-          "gradient": "85:40:20 (high 60 / medium 180 / low 360 ids)"
+          "description": "Ratio-based gradient crops (70:40:20 train)",
+          "images": 27593,
+          "train_gradient_ratio": {"high": 1.0, "medium": 0.57, "low": 0.29},
+          "train_per_bin": {"high": 70, "medium": 40, "low": 20},
+          "holdout_per_identity": 15,
+          "kept_per_bin": {"high": 85, "medium": 55, "low": 35}
         }
       }
     },
-    "full": {
-      "name": "SFHQ-VirtualID-Full",
+    "raw": {
+      "name": "SFHQ-VirtualID-Raw",
       "resolution": [1024, 1024],
       "color_mode": "RGB",
       "format": "PNG",
       "artifacts": {
-        "dataset_candidates.csv/.parquet": {
-          "description": "Balanced full-res candidates (no quality trim)",
+        "dataset_raw.csv/.parquet": {
+          "description": "Max-size full-res portraits (no splits, no quality trim)",
           "images": 51000,
           "images_per_identity": 85
-        },
-        "dataset_candidates_imbalanced.csv/.parquet": {
-          "description": "85:40:20 gradient candidates",
-          "images": "~TBD",
-          "gradient": "85:40:20 (high 60 / medium 180 / low 360 ids)"
         }
       }
     }
   },
   "identity_count": 600,
   "splits": {
-    "retain": {"identities": 450},
-    "test": {"identities": 90},
-    "forget": {"identities": 60, "steps": 15, "per_step": 4}
+    "retain": {"identities": 540},
+    "forget": {"identities": 60, "steps": 15, "per_step": 4},
+    "image_subset": {"train": "per-identity train images", "holdout": "per-identity held-out evaluation images"}
   },
-  "shared_invariant": "Every identity_id maps to exactly one split across ALL four artifacts.",
+  "shared_invariant": "Every identity_id maps to exactly one split (retain|forget) and contributes BOTH image_subset values (train|holdout) in the Bench releases. Raw has no splits.",
   "random_seed": 42,
   "shard_seeds": [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64],
   "shard_count": 12,
   "identities_per_shard": 50,
-  "git_commit": "309bed3441f170401c78797025508829c3daeddb",
+  "git_commit": "148549d",
   "generation_config": {
     "base_model": "RunDiffusion/Juggernaut-XL-v9",
     "num_inference_steps": 30,
@@ -72,14 +72,20 @@
   "metadata_columns": {
     "bench": [
       "image_path", "identity_id", "age_group", "age", "gender", "split",
-      "forget_step", "forget_variant", "arcface_similarity",
+      "forget_step", "forget_variant", "image_subset", "arcface_similarity",
       "laplacian_variance", "detection_confidence", "pose", "expression",
       "lighting", "setting", "camera"
     ],
-    "full": [
+    "bench_imbalanced": [
       "image_path", "identity_id", "age_group", "age", "gender", "split",
-      "forget_step", "forget_variant", "arcface_similarity", "pose",
-      "expression", "lighting", "setting", "camera"
+      "forget_step", "forget_variant", "image_subset", "arcface_similarity",
+      "laplacian_variance", "detection_confidence", "pose", "expression",
+      "lighting", "setting", "camera", "popularity_bin", "images_per_identity"
+    ],
+    "raw": [
+      "image_path", "identity_id", "age_group", "age", "gender",
+      "arcface_similarity", "pose", "expression", "lighting",
+      "setting", "camera"
     ]
   },
   "package_versions": {

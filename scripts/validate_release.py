@@ -27,15 +27,15 @@ import pandas as pd
 from PIL import Image
 
 
-VALID_SPLITS = {"retain", "test", "forget"}
+VALID_SPLITS = {"retain", "forget"}
 VALID_AGEGROUPS = {0, 1, 2, 3}
 # Resolution defaults per release (overridable via --expected-*)
 DEFAULT_SIZES = {
     "bench": (224, 224),
-    "full": (1024, 1024),
+    "raw": (1024, 1024),
 }
-# portrait_* (full-res) and candidate_* (pipeline) filenames are legitimate
-# in the Full release but forbidden in Bench (raw/full-res images never
+# portrait_* (raw) and candidate_* (pipeline) filenames are legitimate
+# in the Raw release but forbidden in Bench (raw/full-res images never
 # shipped there).
 FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"^/tmp/", "TMPDIR path"),
@@ -112,7 +112,7 @@ def validate(
         schema = _load_schema(Path(schema_path), schema_def)
 
     # Resolution: derive from release type unless explicitly overridden
-    release_type = "full" if schema_def.startswith("full") else "bench"
+    release_type = "raw" if schema_def == "raw" else "bench"
     if expected_width is None or expected_height is None:
         expected_width, expected_height = DEFAULT_SIZES[release_type]
     expected_size = (expected_width, expected_height)
@@ -141,10 +141,26 @@ def validate(
             f"{dupes['image_path'].iloc[:5].tolist()}"
         )
 
-    # ---- 3. Valid split values ----
-    invalid_splits = set(df["split"]) - VALID_SPLITS
-    if invalid_splits:
-        failures.append(f"Invalid split values: {invalid_splits}")
+    # ---- 3. Valid split values (Bench only — Raw has no splits) ----
+    if "split" in df.columns:
+        invalid_splits = set(df["split"]) - VALID_SPLITS
+        if invalid_splits:
+            failures.append(f"Invalid split values: {invalid_splits}")
+
+    # ---- 3b. Valid image_subset values (MUFAC-aligned Bench) ----
+    if "image_subset" in df.columns:
+        invalid_subsets = set(df["image_subset"]) - {"train", "holdout"}
+        if invalid_subsets:
+            failures.append(f"Invalid image_subset values: {invalid_subsets}")
+        # Every identity must contribute BOTH train and holdout images
+        # (per-identity reserve — the MUFAC design invariant).
+        per_id_subsets = df.groupby("identity_id")["image_subset"].nunique()
+        missing_subset = per_id_subsets.loc[lambda x: x < 2]
+        if len(missing_subset) > 0:
+            failures.append(
+                f"{len(missing_subset)} identities lack both train+holdout: "
+                f"{missing_subset.index.tolist()[:10]}"
+            )
 
     # ---- 4. Valid agegroup values ----
     if "age_group" in df.columns:
@@ -152,8 +168,8 @@ def validate(
         if invalid_ages:
             failures.append(f"Invalid age_group values: {invalid_ages}")
 
-    # ---- 5. Cluster split isolation ----
-    if check_cluster_split_isolation:
+    # ---- 5. Cluster split isolation (Bench only) ----
+    if check_cluster_split_isolation and "split" in df.columns:
         multi_split = (
             df.groupby("identity_id")["split"]
             .nunique()
@@ -165,8 +181,8 @@ def validate(
                 f"{multi_split.index.tolist()[:10]}"
             )
 
-    # ---- 6. Forget step validity ----
-    forget_df = df[df["split"] == "forget"]
+    # ---- 6. Forget step validity (Bench only) ----
+    forget_df = df[df["split"] == "forget"] if "split" in df.columns else df.iloc[0:0]
     if len(forget_df) > 0:
         invalid_steps = set(forget_df["forget_step"]) - set(range(-1, 100))
         if invalid_steps:
@@ -216,11 +232,11 @@ def validate(
 
     # ---- 8. No internal paths in metadata ----
     if require_relative_paths:
-        # Full releases legitimately contain portrait_*.png (and the old
+        # Raw releases legitimately contain portrait_*.png (and the old
         # pipeline names candidate_*/accepted_* would also be leaks there);
         # the raw-crop checks apply to Bench only.
         patterns = FORBIDDEN_PATH_PATTERNS
-        if release_type == "full":
+        if release_type == "raw":
             patterns = [p for p in patterns
                         if "candidate_" not in p[0]
                         and "portrait_" not in p[0]
@@ -338,7 +354,7 @@ def main() -> None:
     parser.add_argument(
         "--schema-def",
         default="bench_balanced",
-        choices=["bench_balanced", "bench_imbalanced", "full_balanced", "full_imbalanced"],
+        choices=["bench_balanced", "bench_imbalanced", "raw"],
         help="Which schema definition to validate against",
     )
     parser.add_argument(
