@@ -3,7 +3,7 @@
 # hpc_generate.sh — Phase 2: Identity Generation (15-way GPU array)
 # ==========================================
 #SBATCH --job-name=msc_generate
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --partition=gpu
 #SBATCH --exclusive                       # Whole node per shard — no GPU sharing
 #SBATCH --gres=gpu:1                      # Request 1 GPU (node has 4; 3 idle)
