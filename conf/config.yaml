@@ -36,10 +36,14 @@ pipeline:
     base_model: RunDiffusion/Juggernaut-XL-v9
     width: 1024
     height: 1024
-    # guidance_scale, ip_adapter_scale, and num_inference_steps are
-    # resolved from MODEL_DEFAULTS in generate_identities.py based on
-    # the selected base_model.  Override via CLI to bypass presets:
+    # guidance_scale, ip_adapter_scale, num_inference_steps default to null:
+    # resolved from MODEL_DEFAULTS in generate_identities.py based on the
+    # selected base_model.  Override via CLI to bypass presets (keys exist
+    # in the schema so Hydra 1.3 accepts the override):
     #   pipeline.instantid.guidance_scale=4.0
+    guidance_scale: null
+    ip_adapter_scale: null
+    num_inference_steps: null
     controlnet_conditioning_scale: 0.80
     cache_dir: null
     require_cuda: true

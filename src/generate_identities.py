@@ -102,10 +102,20 @@ def generate_identities(
         "stabilityai/stable-diffusion-xl-base-1.0"
     )
     # Resolve hyperparams: CLI override > model preset > hardcoded fallback.
+    # `or` bridges null config defaults (keys present-but-null) to the preset.
     _preset = MODEL_DEFAULTS.get(base_model, {})
-    _gs = float(instantid_config.get("guidance_scale", _preset.get("guidance_scale", 5.5)))
-    _ips = float(instantid_config.get("ip_adapter_scale", _preset.get("ip_adapter_scale", 0.90)))
-    _steps = int(instantid_config.get("num_inference_steps", _preset.get("num_inference_steps", 25)))
+    _gs = float(
+        instantid_config.get("guidance_scale")
+        or _preset.get("guidance_scale", 5.5)
+    )
+    _ips = float(
+        instantid_config.get("ip_adapter_scale")
+        or _preset.get("ip_adapter_scale", 0.90)
+    )
+    _steps = int(
+        instantid_config.get("num_inference_steps")
+        or _preset.get("num_inference_steps", 25)
+    )
     sources = get_image_paths(seedsdir)
     if len(sources) < nidentities:
         raise ValueError(
