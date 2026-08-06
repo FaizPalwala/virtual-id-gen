@@ -23,18 +23,19 @@ if [ ! -d "$SEEDS_DIR" ]; then
 fi
 
 # Collect filenames, shuffle deterministically, partition.
-mapfile -t seeds < <(ls "$SEEDS_DIR"/seed_*.jpg | sort)
-nseeds="${#seeds[@]}"
+# (POSIX-safe: no mapfile — macOS ships bash 3.2.)
+nseeds=$(ls "$SEEDS_DIR"/seed_*.jpg | wc -l | tr -d ' ')
 echo "Found $nseeds seeds in $SEEDS_DIR, partitioning into $NSHARDS shards"
 
 # Deterministic shuffle with a fixed seed (different from the RNG seed used
 # for generation — this is a static permutation so the partition itself is
 # reproducible).
-perl -e '
+ls "$SEEDS_DIR"/seed_*.jpg | sort | perl -e '
 use List::Util qw(shuffle);
 srand(7);
-print join("\n", shuffle(@ARGV)) . "\n";
-' "${seeds[@]}" > /tmp/seed_shuffle.txt
+while (<STDIN>) { chomp; push @seeds, $_; }
+print join("\n", shuffle(@seeds)) . "\n";
+' > /tmp/seed_shuffle.txt
 
 # Create shard dirs and distribute seeds round-robin from shuffled list.
 for i in $(seq 0 $((NSHARDS - 1))); do
