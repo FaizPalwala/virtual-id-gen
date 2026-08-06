@@ -140,10 +140,53 @@ def download_sfhq(
         kmeans.cluster_centers_, embeddings_arr
     )
 
-    # ── 5. Save seeds sequentially ──
-    print(f"\n[INFO] Saving {num_images} diverse seeds to {output_path} ...")
-    for cluster_id, src_idx in enumerate(tqdm(closest, desc="Saving seeds")):
+    # ── 4b. Hash-dedupe the selected representatives ──
+    # Two clusters can land on the SAME source image (SFHQ's pool contains
+    # byte-identical duplicates).  The v1.0.0 seed pool shipped 2 duplicate
+    # pairs (600 seeds); at 750 clusters it produces 5 — those would become
+    # near-duplicate identities (the A3 seed-reuse bug).  Dedupe by sha1 and
+    # refill each duplicate slot from the next-closest image to that
+    # cluster's center, so every seed is a distinct face.
+    def file_sha1(path: str) -> str:
+        import hashlib
+        return hashlib.sha1(open(path, "rb").read()).hexdigest()
+
+    seen_hashes: set[str] = set()
+    picks: dict[int, str] = {}  # cluster_id -> src path
+    for cluster_id, src_idx in enumerate(closest):
         src = valid_paths[src_idx]
+        h = file_sha1(src)
+        if h in seen_hashes:
+            continue  # refilled below
+        seen_hashes.add(h)
+        picks[cluster_id] = src
+
+    if len(picks) < num_images:
+        print(f"[INFO] {num_images - len(picks)} duplicate picks found — "
+              f"refilling from next-closest unique images ...")
+        # Cosine similarity to each cluster centre (embeddings normalised).
+        for cluster_id in range(num_images):
+            if cluster_id in picks:
+                continue
+            centre = kmeans.cluster_centers_[cluster_id]
+            sims = embeddings_arr @ centre
+            for order in np.argsort(-sims):
+                cand = valid_paths[order]
+                h = file_sha1(cand)
+                if h not in seen_hashes:
+                    seen_hashes.add(h)
+                    picks[cluster_id] = cand
+                    break
+
+    if len(picks) < num_images:
+        print(f"[WARN] Only {len(picks)} unique seeds available "
+              f"(requested {num_images}); continuing with what we have.")
+    else:
+        print(f"[OK] {len(picks)} unique (hash-distinct) seeds selected.")
+
+    # ── 5. Save seeds sequentially ──
+    print(f"\n[INFO] Saving {len(picks)} diverse seeds to {output_path} ...")
+    for cluster_id, src in sorted(picks.items()):
         dest = output_path / f"seed_{cluster_id:04d}.jpg"
         shutil.copy2(src, dest)
 
