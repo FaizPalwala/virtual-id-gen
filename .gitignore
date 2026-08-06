@@ -236,5 +236,9 @@ RELEASE_TODO.md
 # Hermes desktop app artifacts — never commit
 .hermes/
 
+# Local downstream-contract notes — kept local, shared with msc-project
+# consumers directly; never committed to this repo
+docs/DOWNSTREAM_CHANGES.md
+
 # macOS junk
 .DS_Store

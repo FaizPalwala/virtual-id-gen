@@ -160,11 +160,6 @@ Full configuration in [`conf/config.yaml`](conf/config.yaml).
 
 ## Quick start
 
-> **Downstream consumers of the release CSVs:** read
-> [`docs/DOWNSTREAM_CHANGES.md`](docs/DOWNSTREAM_CHANGES.md) first — the
-> v1.1.0 redesign changed the schema (`forget_variant` removed,
-> `forget_step_poisson` added, prompt metadata stripped from Bench).
-
 ### Environment
 
 ```bash
