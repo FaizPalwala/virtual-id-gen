@@ -3,13 +3,22 @@
 # hpc_generate.sh — Phase 2: Identity Generation (15-way GPU array)
 # ==========================================
 #SBATCH --job-name=msc_generate
-#SBATCH --time=1-00:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=gpu
-#SBATCH --exclusive                       # Whole node per shard — no GPU sharing
-#SBATCH --gres=gpu:1                      # Request 1 GPU (node has 4; 3 idle)
+#SBATCH --gres=gpu:1                      # Dedicated GPU (gres isolation = no sharing)
+#SBATCH --mem=64G                         # Explicit RAM (SDXL+ControlNet+InstantID+ONNX)
+#SBATCH --cpus-per-task=8                 # Matches OMP_NUM_THREADS in the script
 #SBATCH --array=0-14
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
+
+# NOTE (2026-08-06): --exclusive removed deliberately.  It reserved a whole
+# 4-GPU node per shard to use 1 GPU (15 of 20 GPUs wasted under the 5-job
+# concurrency cap → scheduler deprioritized the array).  GPU isolation is
+# guaranteed by --gres=gpu:1 alone; --mem=64G pins the CPU-RAM footprint
+# (model loading peak ~30 GB, 2× headroom).  Per-shard wall time is ~8 h
+# (100 cands/id); 12 h limit gives 50% headroom and stays backfill-friendly.
+# If OOM resurfaces: bump --mem (CPU) or re-add --exclusive (node-level).
 
 # CUDA memory: enable expandable segments to reduce fragmentation from
 # loading SDXL + ControlNet + Juggernaut + InstantID in sequence.
