@@ -170,7 +170,6 @@ python main.py --config-name step2_generate \
     dataset.nidentities=50 \
     dataset.seed="$SHARD_SEED" \
     dataset.forget_steps=0 \
-    dataset.test_pct=0 \
     > "$REPO_DIR/logs/generate_shard_${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?
