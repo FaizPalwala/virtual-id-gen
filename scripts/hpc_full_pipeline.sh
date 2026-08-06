@@ -22,22 +22,25 @@
 #     ┌──────▼──────┐
 #     │   merge      │  1 CPU        (hpc_merge.sh)
 #     └──────┬──────┘
-#            │ afterok
+#            │ afterok (BOTH)
+#     ┌──────▼──────┐          ┌──────────────┐
+#     │  extract     │  1 GPU  │  preprocess   │  1 GPU
+#     │  (hpc_extract.sh)      │  (hpc_preprocess.sh)
+#     └──────┬──────┘          └──────┬───────┘
+#            │ afterok:extract,preprocess
 #     ┌──────▼──────┐
-#     │  extract     │  1 GPU        (hpc_extract.sh)  — ArcFace on 1024 candidates
-#     └──────┬──────┘
-#            │ afterok
-#     ┌──────▼──────┐
-#     │ preprocess   │  1 GPU        (hpc_preprocess.sh) — 224 crops
-#     └──────┬──────┘
-#            │ afterok
-#     ┌──────▼──────┐
-#     │   build      │  1 CPU        (hpc_build.sh)   — all four dataset pairs
+#     │   build      │  1 CPU        (hpc_build.sh)   — all dataset artifacts
 #     └─────────────┘
 #
-# Extract runs BEFORE preprocess: demographics/embeddings come from the
-# 1024×1024 candidates (InsightFace detection fails on tight 224 crops),
-# and the 224 crops inherit them via identity join at build time.
+# Extract and preprocess are SIBLING steps: both consume the merge output
+# (1024×1024 candidates + raw_candidate_manifest.csv) and neither reads the
+# other's output.  Preprocess runs its own ArcFace gate (load_arcface_model
+# in preprocess.py); extract writes embeddings/ + demographics.  The build
+# step joins their outputs through the (identity_id, trial) key.  Running
+# them on two GPUs in parallel halves the post-merge wall time.
+# NOTE: demographics/embeddings come from the 1024×1024 candidates
+# (InsightFace detection fails on tight 224 crops), and the 224 crops
+# inherit them via identity join at build time.
 #
 # Each job writes its own log under logs/.
 # If any phase fails, downstream jobs are cancelled by Slurm.
@@ -61,7 +64,7 @@ submit_job() {
     echo "$job_id"
 }
 
-# ---- Phase 1: Generate (4-GPU array) ----
+# ---- Phase 1: Generate (15-GPU array) ----
 GEN_JOB=$(submit_job "generate" "$SCRIPT_DIR/hpc_generate.sh")
 echo ""
 
@@ -70,31 +73,29 @@ MERGE_JOB=$(submit_job "merge" "$SCRIPT_DIR/hpc_merge.sh" \
     --dependency="afterok:${GEN_JOB}")
 echo ""
 
-# ---- Phase 3: Extract (GPU, depends on merge) ----
-# ArcFace embeddings + demographics on the 1024x1024 candidates.
+# ---- Phase 3: Extract + Preprocess (two GPUs, both depend on merge) ----
+# Sibling steps — run in PARALLEL on two GPUs.  Extract does ArcFace
+# embeddings + demographics on the 1024x1024 candidates; preprocess does
+# MTCNN align + quality gate to 224x224 crops.  Neither reads the other's
+# output; build joins them via (identity_id, trial).
 EXT_JOB=$(submit_job "extract" "$SCRIPT_DIR/hpc_extract.sh" \
+    --dependency="afterok:${MERGE_JOB}")
+PRE_JOB=$(submit_job "preprocess" "$SCRIPT_DIR/hpc_preprocess.sh" \
     --dependency="afterok:${MERGE_JOB}")
 echo ""
 
-# ---- Phase 4: Preprocess (GPU, depends on extract) ----
-# MTCNN align + quality gate on the candidates -> 224x224 crops.
-PRE_JOB=$(submit_job "preprocess" "$SCRIPT_DIR/hpc_preprocess.sh" \
-    --dependency="afterok:${EXT_JOB}")
-echo ""
-
-# ---- Phase 5: Build (CPU, depends on preprocess) ----
-# Assembles all four dataset pairs (Bench + Full, balanced + imbalanced).
+# ---- Phase 4: Build (CPU, depends on BOTH extract and preprocess) ----
 BLD_JOB=$(submit_job "build" "$SCRIPT_DIR/hpc_build.sh" \
-    --dependency="afterok:${PRE_JOB}")
+    --dependency="afterok:${EXT_JOB}:${PRE_JOB}")
 echo ""
 
 echo "=============================================="
 echo "Pipeline submitted.  Summary:"
 echo "  generate    : $GEN_JOB"
 echo "  merge       : $MERGE_JOB  (after $GEN_JOB)"
-echo "  extract     : $EXT_JOB    (after $MERGE_JOB)"
-echo "  preprocess  : $PRE_JOB    (after $EXT_JOB)"
-echo "  build       : $BLD_JOB    (after $PRE_JOB)"
+echo "  extract     : $EXT_JOB    (after $MERGE_JOB, parallel)"
+echo "  preprocess  : $PRE_JOB    (after $MERGE_JOB, parallel)"
+echo "  build       : $BLD_JOB    (after extract AND preprocess)"
 echo ""
 echo "Monitor with:  squeue -u \$USER"
 echo "=============================================="
