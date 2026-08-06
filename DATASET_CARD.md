@@ -26,9 +26,12 @@ datasets** built from CC0 synthetic SFHQ seed images via an InstantID +
 Juggernaut-XL-v9 + ControlNet pipeline.  Each of the 750 synthetic identities
 is a deletion unit — all images of a single identity share one identity-level
 `split` (`retain` or `forget`), and 75 identities are assigned to a
-sequential 15-step forgetting protocol (uniform 5/step baseline; an optional
-seeded-Poisson forget-variant models GDPR-style deletion request arrival —
-Ginart et al., 2019; arXiv:2012.01668; Shen et al., 2025, arXiv:2507.15280).
+sequential 15-step forgetting protocol.  The balanced artifact ships BOTH
+schedules as columns: `forget_step` (uniform 5/step baseline — step index ==
+cumulative count) and `forget_step_poisson` (seeded Poisson arrival-model
+stress test, λ=5 rebalanced to 75 — Ginart et al., 2019; arXiv:2012.01668;
+Shen et al., 2025, arXiv:2507.15280).  The imbalanced artifact carries no
+schedule columns; its experimental axis is the popularity gradient.
 
 **MUFAC-aligned evaluation:** every identity contributes **both** per-image
 `image_subset` values (`train` + `holdout`).  There is no identity-disjoint
@@ -84,13 +87,22 @@ are possible and must be acknowledged.**
 | `gender` | int | 0/1 (InsightFace classifier) |
 | `split` | string | `retain`, `forget` (identity-level) |
 | `image_subset` | string | `train`, `holdout` (per-image; MUFAC-aligned) |
-| `forget_step` | int | 0–14 (forget only), -1 (retain) |
-| `forget_variant` | int | Index within forget step; -1 for non-forget |
+| `forget_step` | int | 0–14 (forget only, **uniform** schedule), -1 (retain) |
+| `forget_step_poisson` | int | 0–14 (forget only, **seeded-Poisson** schedule), -1 (retain) |
 | `arcface_similarity` | float | Cosine similarity to identity's mean embedding (confound control) |
 | `laplacian_variance` | float | Sharpness score (quality confound control) |
 | `detection_confidence` | float | Face detector confidence (alignment control) |
 | `popularity_bin` | str | `"high"` / `"medium"` / `"low"` (imbalanced only) |
 | `images_per_identity` | int | Actual per-identity count (imbalanced only) |
+
+**Schedule columns are balanced-only.** The balanced artifact ships both
+`forget_step` (uniform baseline — step index == cumulative forgotten count)
+and `forget_step_poisson` (seeded arrival-model stress test, λ=5 rebalanced
+to 75; evaluate by cumulative count — Shen et al., 2025, arXiv:2507.15280;
+arXiv:2012.01668).  The imbalanced artifact deliberately carries **no
+schedule columns** — its only experimental axis is the popularity gradient.
+Prompt metadata (`pose`/`expression`/`lighting`/`setting`/`camera`) is
+stripped from Bench entirely; it ships only in the Raw release.
 
 **Age-group labels are proxy estimates** from the InsightFace gender/age
 classifier.  They are not verified demographic attributes and should not be
@@ -123,6 +135,29 @@ pretrained features activate at full fidelity from epoch 1.  The imbalanced
 variant adds a ratio-based 5:1 (82:41:16) popularity gradient for
 long-tail unlearning stress-testing, with a uniform 18-image holdout per
 identity so probe stability is comparable across all popularity tiers.
+
+### Evaluation protocol (long-tail hypothesis test)
+
+The imbalanced artifact exists to test **H1**: *high-bin identities are
+over-learned (82 train images) → hardest to forget; low-bin identities are
+under-learned (16 train images) → easiest to scrub.*  The protocol below
+guards the measurement trap where a low-bin MIA baseline near 0.5 means
+"never learned", not "scrubbed".  Long-tail unlearning failure modes are
+documented in Yu et al., 2026 (FaLW, arXiv:2601.18650 — heterogeneous and
+skewed unlearning deviation) and GENIU (arXiv:2406.07885).
+
+| Step | Protocol | What it isolates |
+|---|---|---|
+| **A. Baseline gate** | Report per-bin MIA AUC + per-identity train accuracy **before** unlearning.  A low-bin baseline ≈ 0.5 is floor-bound — report as a finding (FaLW skewed deviation), never average away | Separates "never learned" from "scrubbed" |
+| **B. Distance-to-oracle** | Per-bin retrain oracle (retrain without that bin's forget identities); measure per-bin distance (weight/behavioral) after a fixed unlearning budget | High-bin farther from its oracle = harder, budget-fairly |
+| **C. Budget sweep** | Sweep unlearning budget per bin; budget at which each bin reaches its oracle = difficulty | Cleanest causal test of H1 |
+| **D. Balanced cross-check** | Run the SAME 75 forget identities through the balanced artifact (90/id each) | Count-gradient vs identity attribution (confound control) |
+| **E. Intensity-modulation stress test** | Evaluate a fixed-intensity baseline; expect heterogeneous/skewed deviation (FaLW) | Whether per-sample reweighting is needed at identity level |
+
+**Analysis rule:** all cross-schedule and cross-bin comparisons are made by
+**cumulative forgotten count**, never by raw step index (Shen et al., 2025,
+arXiv:2507.15280).  The retrain-oracle definition follows Bourtoule et al.,
+2021 (IEEE S&P).
 
 ---
 

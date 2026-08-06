@@ -37,7 +37,7 @@ The project publishes **two complementary datasets** (see
 | **Total images** | 67,500 (Bench balanced) / 36,075 (Bench imbalanced) / 75,000 (Raw) |
 | **Splits** | Retain 675, Forget 75 identities; per-image `image_subset` (train + holdout) |
 | **Forget protocol** | 15 steps, 75 forget identities — uniform 5/step (baseline) or seeded-Poisson batches (variant) |
-| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
+| **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_step_poisson`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence` (prompt metadata stripped from Bench) |
 | **Labels (imbalanced)** | plus `popularity_bin`, `images_per_identity` on the 224 variant |
 | **Metadata format** | CSV + Parquet |
 | **Intended task** | Machine unlearning (identity-level deletion) |
@@ -61,9 +61,9 @@ InstantID solves both problems:
   than scattered pixels.
 - **Sequential forget protocol.**  75 identity clusters are deleted over 15
   steps, modelling real-world incremental deletion requests (GDPR / CCPA).
-  Two schedules ship (configurable via `dataset.forget_distribution`):
-  - `uniform` (baseline) — 5 identities per step, equal counts.  Step index
-    == cumulative forgotten count, so per-step curves are directly
+  Both schedules ship as columns in the same artifact:
+  - `forget_step` (uniform baseline) — 5 identities per step, equal counts.
+    Step index == cumulative forgotten count, so per-step curves are directly
     comparable with no batch-size confound.
   - `poisson` (variant) — per-step counts drawn from a **seeded Poisson**
     distribution (λ = 5), rebalanced to total 75.  Models the arrival
@@ -124,8 +124,7 @@ four dataset pairs from a single pipeline run.
 | `dataset.imagesperidentity` | 90 | Final images per identity |
 | `dataset.candidatesperidentity` | 100 | Candidates generated per identity |
 | `dataset.forget_pct` | 0.10 | Fraction of identities in forget set |
-| `dataset.forget_steps` | 15 | Unlearning steps |
-| `dataset.forget_distribution` | `uniform` | `"uniform"` (baseline: equal 5/step) or `"poisson"` (variant: seeded Poisson batch sizes modelling GDPR-style deletion request streams; evaluate by cumulative count) |
+| `dataset.forget_steps` | 15 | Unlearning steps (balanced; both schedules ship as `forget_step` + `forget_step_poisson` columns) |
 | `dataset.holdout_frac` | 0.20 | Fraction of each identity's images for holdout evaluation |
 | `dataset.min_holdout` | 5 | Minimum holdout images per identity (floor) |
 | `dataset.skip_download` | false | Skip Kaggle download if data exists locally |
@@ -160,6 +159,11 @@ instruction within an identity.
 Full configuration in [`conf/config.yaml`](conf/config.yaml).
 
 ## Quick start
+
+> **Downstream consumers of the release CSVs:** read
+> [`docs/DOWNSTREAM_CHANGES.md`](docs/DOWNSTREAM_CHANGES.md) first — the
+> v1.1.0 redesign changed the schema (`forget_variant` removed,
+> `forget_step_poisson` added, prompt metadata stripped from Bench).
 
 ### Environment
 
@@ -222,17 +226,27 @@ for all tunables.
 | Column | Type | Description |
 |---|---|---|
 | `image_path` | string | Relative path: `images/identity_NNN/crop_XXX.jpg` |
-| `identity_id` | int (0–599) | Synthetic identity cluster ID |
+| `identity_id` | int (0–749) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label: 0=Young, 1=Adult, 2=Middle-Aged, 3=Senior. Per-image (see note below) |
 | `age` | int | Raw InsightFace age estimate. Per-image (see note below) |
 | `gender` | int (0/1) | InsightFace gender classifier output |
 | `split` | string | `retain` or `forget` — identity-level role |
-| `forget_step` | int (0–14, -1) | Unlearning step; -1 for non-forget |
-| `forget_variant` | int (0–N, -1) | Variant index within a forget step; -1 for non-forget |
+| `forget_step` | int (0–14, -1) | Step under the **uniform** schedule (5 ids/step; step index == cumulative forgotten count); -1 for retain |
+| `forget_step_poisson` | int (0–14, -1) | Step under the **seeded-Poisson** schedule (variable ids/step, GDPR-arrival stress test; evaluate by cumulative count); -1 for retain |
 | `image_subset` | string | `train` or `holdout` — per-image role (MUFAC-aligned) |
-| `arcface_similarity` | float [0,1] | Cosine similarity to identity's mean ArcFace embedding (confound control) |
+| `arcface_similarity` | float [-1,1] | Cosine similarity to identity's mean ArcFace embedding (confound control) |
 | `laplacian_variance` | float | Sharpness score from quality filter (quality confound control) |
 | `detection_confidence` | float | Face detector confidence (alignment quality control) |
+
+> **Both forget schedules ship in one artifact.** `forget_step` is the MUFAC
+> baseline (equal 5 ids/step — per-step curves are directly comparable).
+> `forget_step_poisson` is the seeded arrival-model stress test (λ=5,
+> rebalanced to total 75; occasional near-empty and burst steps).  For
+> cross-schedule comparisons, evaluate by **cumulative forgotten count**,
+> not step index (Shen et al., 2025, arXiv:2507.15280).  The schedule is a
+> fixed dataset property (recorded in `RELEASE_MANIFEST.json`), not a
+> runtime variable.  Prompt metadata (`pose`…`camera`) is deliberately
+> stripped from Bench — it ships only in the Raw release.
 
 > **Per-image age labels (by design).** `age_group` and `age` are estimated
 > per image on the parent 1024×1024 candidate (InsightFace gender/age
@@ -286,7 +300,7 @@ of up to 100 images/identity with their own train/holdout splits.
 
 No `laplacian_variance` or `detection_confidence` — these are crop-level
 quality metrics and are meaningless on raw portraits.  No `split` /
-`forget_step` / `forget_variant` / `image_subset` — the Raw release is
+`forget_step` / `forget_step_poisson` / `image_subset` — the Raw release is
 max-size with no split protocol; split construction is left to the consumer.
 
 The Raw release is **max-size only** (all 100 portraits per identity).  The
@@ -330,20 +344,37 @@ and the ratios re-derive train counts (guidance §2.2).
 
 | Column | Type | Description |
 |---|---|---|
-| ... | ... | All columns from the balanced schema (incl. gender, arcface_similarity, laplacian_variance, detection_confidence, image_subset) |
+| `image_path` | string | Relative path: `images/identity_NNN/crop_XXX.jpg` |
+| `identity_id` | int (0–749) | Synthetic identity cluster ID |
+| `age_group` / `age` / `gender` | int | Proxy demographics (per-image) |
+| `split` | string | `retain` / `forget` — identity-level role (SAME map as balanced) |
+| `image_subset` | string | `train` / `holdout` (MUFAC-aligned; 18 holdout/id constant across bins) |
+| `arcface_similarity` | float [-1,1] | Cosine sim to identity's mean embedding (confound control) |
+| `laplacian_variance` / `detection_confidence` | float | Quality confound controls |
 | `popularity_bin` | string | `"high"`, `"medium"`, or `"low"` |
-| `images_per_identity` | int | Actual per-identity image count (variable (configurable ratios)) |
+| `images_per_identity` | int | Actual kept-image count per identity (100/59/34 — continuous difficulty axis) |
+
+> **No forget-schedule columns in imbalanced.** The schedule axis lives in
+> the balanced artifact (`forget_step` / `forget_step_poisson`); the
+> imbalanced variant is a single-purpose long-tail stress test whose only
+> experimental axis is the popularity gradient.  Downstream: stratify by
+> `popularity_bin`, and use the balanced artifact's split map to run the
+> same 75 forget identities as a cross-dataset control.
 
 Designed for stress-testing the long tail: high-popularity identities
 (celebrities) are over-learned and hardest to forget; low-popularity identities
 are under-learned and easiest to scrub.  The ratio between high and low
-bins mirrors real-world face dataset distributions.
+bins mirrors real-world face dataset distributions (5:1, VGG-Face2 range).
 
 ### Imbalanced evaluation (MUFAC-aligned)
 
 The imbalanced variant answers the question: *"Does unlearning remain effective
 across the long-tail data distribution?"*  All evaluation gates use the
-**holdout** subset (never seen during training or unlearning):
+**holdout** subset (never seen during training or unlearning).  The
+recommended protocol (baseline gate → distance-to-oracle → budget sweep →
+balanced cross-check; see `DATASET_CARD.md` §Evaluation protocol) guards the
+low-bin floor effect: report per-bin MIA AUC **before** unlearning, since a
+low-bin baseline near 0.5 means "never learned", not "scrubbed".
 
 | Metric | Stratification | Expectation | Threshold |
 |---|---|---|---|
@@ -394,7 +425,7 @@ and privacy policy.
 | Component | Pinned value |
 |---|---|
 | Random seed | 42 (configurable) |
-| Shard seeds | 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 |
+| Shard seeds | 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70 |
 | Python | 3.10 |
 | PyTorch | 2.6.0+cu124 |
 | Diffusers | 0.39.0 |

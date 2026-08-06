@@ -1,11 +1,12 @@
 """Contract tests for build_imbalanced_dataset — the MUFAC invariants.
 
 These lock the data-freeze properties that the dissertation depends on:
-  - holdout is the same per-identity reserve as balanced (15/id with
+  - holdout is the same per-identity reserve as balanced (18/id with
     defaults), uniform across ALL popularity bins
-  - train gradient is ratio-based 70:40:20 (max_train = candidates - holdout)
+  - train gradient is ratio-based 5:1 (82:41:16; max_train = candidates - holdout)
   - identity-level split assignment is IDENTICAL to the balanced release
   - every identity contributes both image_subset values
+  - NO forget-schedule columns (schedule axis lives in balanced)
 """
 import numpy as np
 import pandas as pd
@@ -91,11 +92,22 @@ def test_imbalanced_holdout_and_gradient(dataset_inputs):
         dataset_inputs["processed"],
         dataset_inputs["embeddings"],
         dataset_inputs["dataset"],
-        nforget=2, forget_steps=15, randomstate=42,
+        nforget=2, randomstate=42,
         holdout_frac=0.20, min_holdout=5,
         imagesperidentity=90, candidatesperidentity=100,
     )
     df = _read(result_path)
+
+    # Column contract: exactly the 12 imbalanced columns, no forget-schedule
+    # columns (the schedule axis lives in balanced), no prompt metadata.
+    assert list(df.columns) == [
+        "image_path", "identity_id", "age_group", "age", "gender", "split",
+        "image_subset", "arcface_similarity", "laplacian_variance",
+        "detection_confidence", "popularity_bin", "images_per_identity",
+    ], list(df.columns)
+    for col in ("forget_step", "forget_step_poisson", "pose", "expression",
+                "lighting", "setting", "camera"):
+        assert col not in df.columns, f"{col} should not exist in imbalanced"
 
     # Every identity contributes BOTH subsets.
     subsets = df.groupby("identity_id")["image_subset"].apply(set)
@@ -141,7 +153,7 @@ def test_imbalanced_split_matches_balanced(dataset_inputs):
         dataset_inputs["processed"],
         dataset_inputs["embeddings"],
         dataset_inputs["dataset"] + "_imb",
-        nforget=2, forget_steps=15, randomstate=42,
+        nforget=2, randomstate=42,
         holdout_frac=0.20, min_holdout=5,
         imagesperidentity=90, candidatesperidentity=100,
     )
@@ -149,3 +161,44 @@ def test_imbalanced_split_matches_balanced(dataset_inputs):
     imb = _read(imbalanced_path).drop_duplicates("identity_id").set_index("identity_id")["split"]
     assert (bal != imb).sum() == 0
     assert bal.value_counts().to_dict() == {"retain": 8, "forget": 2}
+
+
+def test_balanced_ships_both_forget_schedules(dataset_inputs):
+    """The balanced artifact carries BOTH schedules as columns.
+
+    `forget_step` = uniform (equal ids/step); `forget_step_poisson` =
+    seeded arrival-model schedule.  Same forget set, different step
+    assignment — and per-step counts differ (that's the stress test).
+    """
+    result_path = build_dataset(
+        dataset_inputs["processed"],
+        dataset_inputs["embeddings"],
+        dataset_inputs["dataset"] + "_both",
+        nforget=3, forget_steps=3, randomstate=42,
+        imagesperidentity=90, holdout_frac=0.20, min_holdout=5,
+    )
+    df = _read(result_path)
+
+    # Column contract: 12 balanced columns incl. both schedules.
+    assert "forget_step" in df.columns and "forget_step_poisson" in df.columns
+    assert "forget_variant" not in df.columns
+    for col in ("pose", "expression", "lighting", "setting", "camera"):
+        assert col not in df.columns, f"{col} should not exist in bench"
+
+    forget = df[df["split"] == "forget"]
+    n_ids = forget["identity_id"].nunique()
+    assert n_ids == 3
+
+    # Uniform: 3 ids / 3 steps → 1 per step, step index == cumulative.
+    unif = forget.groupby("identity_id")["forget_step"].first()
+    assert set(unif) == {0, 1, 2}
+
+    # Poisson: same 3 ids, valid step range, all assigned.
+    pois = forget.groupby("identity_id")["forget_step_poisson"].first()
+    assert set(pois) <= {0, 1, 2}
+    assert pois.notna().all()
+
+    # Retain rows: -1 in both schedule columns.
+    retain = df[df["split"] == "retain"]
+    assert (retain["forget_step"] == -1).all()
+    assert (retain["forget_step_poisson"] == -1).all()

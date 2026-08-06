@@ -44,8 +44,10 @@
   "splits": {
     "retain": {"identities": 675},
     "forget": {"identities": 75, "steps": 15, "per_step": 5,
-               "distribution": "uniform",
-               "variant": "poisson (seeded, lambda=5, rebalanced to 75; evaluate by cumulative count — Ginart et al. 2019, arXiv:2012.01668, arXiv:2507.15280)"},
+               "schedules": {
+                   "uniform": "forget_step column (baseline; step index == cumulative count)",
+                   "poisson": "forget_step_poisson column (seeded, lambda=5, rebalanced to 75; evaluate by cumulative count — Ginart et al. 2019, arXiv:2012.01668, arXiv:2507.15280)"
+               }},
     "image_subset": {"train": "per-identity train images", "holdout": "per-identity held-out evaluation images"}
   },
   "shared_invariant": "Every identity_id maps to exactly one split (retain|forget) and contributes BOTH image_subset values (train|holdout) in the Bench releases. Raw has no splits.",
@@ -74,15 +76,13 @@
   "metadata_columns": {
     "bench": [
       "image_path", "identity_id", "age_group", "age", "gender", "split",
-      "forget_step", "forget_variant", "image_subset", "arcface_similarity",
-      "laplacian_variance", "detection_confidence", "pose", "expression",
-      "lighting", "setting", "camera"
+      "forget_step", "forget_step_poisson", "image_subset", "arcface_similarity",
+      "laplacian_variance", "detection_confidence"
     ],
     "bench_imbalanced": [
       "image_path", "identity_id", "age_group", "age", "gender", "split",
-      "forget_step", "forget_variant", "image_subset", "arcface_similarity",
-      "laplacian_variance", "detection_confidence", "pose", "expression",
-      "lighting", "setting", "camera", "popularity_bin", "images_per_identity"
+      "image_subset", "arcface_similarity", "laplacian_variance",
+      "detection_confidence", "popularity_bin", "images_per_identity"
     ],
     "raw": [
       "image_path", "identity_id", "age_group", "age", "gender",

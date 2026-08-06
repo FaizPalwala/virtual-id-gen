@@ -23,11 +23,27 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
+# Bench output schema (224×224 crops, MUFAC-aligned).
+# Design: prompt metadata (pose/expression/lighting/setting/camera) is NOT
+# shipped with Bench — it is unlearning-irrelevant noise there (the Raw
+# release carries it for the general-purpose use case).  The balanced
+# artifact carries BOTH forget schedules: `forget_step` (uniform baseline,
+# 5 ids/step) and `forget_step_poisson` (seeded Poisson arrival-model
+# stress test; evaluate by cumulative count — see _distribute_forget_poisson).
 OUTPUT_COLUMNS = [
     "image_path", "identity_id", "age_group", "age", "gender",
-    "split", "forget_step", "forget_variant", "image_subset",
+    "split", "forget_step", "forget_step_poisson", "image_subset",
     "arcface_similarity", "laplacian_variance", "detection_confidence",
-    "pose", "expression", "lighting", "setting", "camera",
+]
+
+# Imbalanced Bench schema: same core as balanced but NO forget-schedule
+# columns — the popularity gradient (train-count 82:41:16) is the only
+# experimental axis; the schedule axis lives in balanced.
+IMBALANCED_OUTPUT_COLUMNS = [
+    "image_path", "identity_id", "age_group", "age", "gender",
+    "split", "image_subset",
+    "arcface_similarity", "laplacian_variance", "detection_confidence",
+    "popularity_bin", "images_per_identity",
 ]
 
 
@@ -223,17 +239,18 @@ def build_dataset(
     imagesperidentity: int = 90,
     holdout_frac: float = 0.20,
     min_holdout: int = 5,
-    forget_distribution: str = "uniform",
 ) -> str:
     """Build the balanced 224x224 crop dataset with MUFAC-aligned splits.
 
     Every identity contributes to both training and evaluation via the
     ``image_subset`` column, replacing the old identity-disjoint ``test`` split.
 
-    ``forget_distribution`` selects how forget identities are spread over
-    steps: ``"uniform"`` (MUFAC baseline, equal per-step counts) or
-    ``"poisson"`` (seeded Poisson batch sizes modelling GDPR-style deletion
-    request streams — see :func:`_distribute_forget_poisson`).
+    Ships BOTH forget schedules as columns:
+    - ``forget_step`` — uniform baseline (equal ids/step; step index ==
+      cumulative forgotten count, so per-step curves are directly comparable)
+    - ``forget_step_poisson`` — seeded Poisson batch sizes modelling
+      GDPR-style deletion request streams (see
+      :func:`_distribute_forget_poisson`); evaluate by cumulative count.
     """
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
@@ -264,14 +281,10 @@ def build_dataset(
             f"Trial-based join lost rows: {len(manifest)} → {len(final)}"
         )
 
-    # Join generation metadata (pose, expression, lighting, ...) from the
-    # raw candidate manifest.  Metadata is per-identity (same prompt grid for
-    # all candidates), so the join is identity-level.
-    metadata = _load_candidate_metadata(identitydir)
-    if not metadata.empty:
-        final = final.merge(
-            metadata, on="identity_id", how="left", validate="many_to_one"
-        )
+    # NOTE — prompt metadata join (pose/expression/lighting/setting/camera)
+    # happens only in build_raw_dataset; bench OUTPUT_COLUMNS deliberately
+    # strips it (unlearning-irrelevant noise), so merging it here would be
+    # dead work.
 
     # Per-image cosine similarity to the identity's mean embedding.
     # Computed BEFORE trimming so the reference mean spans ALL quality-passing
@@ -316,13 +329,13 @@ def build_dataset(
             final.at[idx, "image_subset"] = value
     final["image_subset"] = final["image_subset"].fillna("train")
 
-    # Distribute forget identities across steps (uniform baseline, or the
-    # seeded-Poisson forget-variant).
-    step_map = (
-        _distribute_forget(forget_ids, nforget, forget_steps, rng)
-        if forget_distribution == "uniform"
-        else _distribute_forget_poisson(forget_ids, nforget, forget_steps, rng)
-    )
+    # ── Forget schedules (BOTH shipped as columns) ──
+    # Uniform: deterministic base+remainder (step index == cumulative count).
+    # Poisson: seeded arrival-model schedule — dedicated RNG stream so the
+    # two schedules are independent of each other and of the split shuffle.
+    rng_poisson = np.random.RandomState(randomstate + 4242)
+    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
+    poisson_map = _distribute_forget_poisson(forget_ids, nforget, forget_steps, rng_poisson)
     final["forgetstep"] = (
         final["identity_id"].map(
             {cid: step for cid, (step, _) in step_map.items()}
@@ -330,9 +343,9 @@ def build_dataset(
         .fillna(-1)
         .astype(int)
     )
-    final["forgetvariant"] = (
+    final["forgetstep_poisson"] = (
         final["identity_id"].map(
-            {cid: variant for cid, (_, variant) in step_map.items()}
+            {cid: step for cid, (step, _) in poisson_map.items()}
         )
         .fillna(-1)
         .astype(int)
@@ -438,13 +451,13 @@ def build_dataset(
             "imagepath": "image_path",
             "agegroup": "age_group",
             "forgetstep": "forget_step",
-            "forgetvariant": "forget_variant",
+            "forgetstep_poisson": "forget_step_poisson",
         }
     )
-    # Fill missing metadata columns with defaults for older manifests.
+    # Fill missing columns with defaults for older manifests.
     for col in OUTPUT_COLUMNS:
         if col not in output_df.columns:
-            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+            output_df[col] = ""
     output_df = output_df[OUTPUT_COLUMNS]
     output_df["image_path"] = (
         output_df["image_path"]
@@ -484,7 +497,6 @@ def build_imbalanced_dataset(
     embeddingsdir: str,
     outputdir: str,
     nforget: int = 40,
-    forget_steps: int = 15,
     randomstate: int = 42,
     holdout_frac: float = 0.20,
     min_holdout: int = 5,
@@ -495,7 +507,6 @@ def build_imbalanced_dataset(
     high_bin_pct: float = 0.10,
     low_bin_pct: float = 0.60,
     train_gradient_ratio: dict[str, float] | None = None,
-    forget_distribution: str = "uniform",
 ) -> str:
     """Build the imbalanced 224x224 dataset with MUFAC-aligned splits.
 
@@ -533,11 +544,9 @@ def build_imbalanced_dataset(
             f"Trial-based join lost rows: {len(manifest)} -> {len(final)}"
         )
 
-    metadata = _load_candidate_metadata(identitydir)
-    if not metadata.empty:
-        final = final.merge(
-            metadata, on="identity_id", how="left", validate="many_to_one"
-        )
+    # NOTE — prompt metadata join (pose/expression/lighting/setting/camera)
+    # happens only in build_raw_dataset; imbalanced bench OUTPUT_COLUMNS
+    # deliberately strips it, so merging it here would be dead work.
 
     # Per-image cosine similarity to the identity's mean embedding.
     # Computed BEFORE pruning so the reference mean spans ALL quality-passing
@@ -647,26 +656,6 @@ def build_imbalanced_dataset(
             imbalanced.at[idx, "image_subset"] = "holdout" if j < n_hold else "train"
     imbalanced["image_subset"] = imbalanced["image_subset"].fillna("train")
 
-    # Forget step distribution (same algorithm + distribution as balanced).
-    step_map = (
-        _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
-        if forget_distribution == "uniform"
-        else _distribute_forget_poisson(forget_ids, nforget, forget_steps, rng_split)
-    )
-    imbalanced["forgetstep"] = (
-        imbalanced["identity_id"].map(
-            {cid: step for cid, (step, _) in step_map.items()}
-        )
-        .fillna(-1)
-        .astype(int)
-    )
-    imbalanced["forgetvariant"] = (
-        imbalanced["identity_id"].map(
-            {cid: variant for cid, (_, variant) in step_map.items()}
-        )
-        .fillna(-1)
-        .astype(int)
-    )
     imbalanced = imbalanced[imbalanced.agegroup != -1].copy()
 
     # ── 6. Add popularity annotation columns ──
@@ -685,18 +674,16 @@ def build_imbalanced_dataset(
     output.mkdir(parents=True, exist_ok=True)
     dataroot = output.parent
 
-    output_columns = OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"]
+    output_columns = IMBALANCED_OUTPUT_COLUMNS
     output_df = imbalanced.rename(
         columns={
             "imagepath": "image_path",
             "agegroup": "age_group",
-            "forgetstep": "forget_step",
-            "forgetvariant": "forget_variant",
         }
     )
-    for col in OUTPUT_COLUMNS:
+    for col in IMBALANCED_OUTPUT_COLUMNS:
         if col not in output_df.columns:
-            output_df[col] = "" if col in ("pose", "expression", "lighting", "setting", "camera") else 0.0
+            output_df[col] = ""
     output_df = output_df[output_columns]
     output_df["image_path"] = (
         output_df["image_path"]
@@ -743,12 +730,12 @@ def build_imbalanced_dataset(
                     }
                     for bin, stats in bin_stats.items()
                 },
-                "forget_steps": forget_steps,
+                "forget_schedules": "none (schedule axis lives in balanced)",
                 "split_sizes": {
                     key: int(value)
                     for key, value in imbalanced.groupby("split").size().items()
                 },
-                "columns": OUTPUT_COLUMNS + ["popularity_bin", "images_per_identity"],
+                "columns": IMBALANCED_OUTPUT_COLUMNS,
             },
             indent=2,
         )
@@ -779,10 +766,10 @@ def build_raw_dataset(
 ) -> str:
     """Build the full-resolution 1024x1024 raw dataset.
 
-    Max-size reference dataset -- all 85 portraits per identity, no
+    Max-size reference dataset -- all 100 portraits per identity, no
     splits.  General-purpose release for identity recognition, face
     generation evaluation, and demographic bias studies.  Researchers
-    can construct balanced subsets of up to 85 images/identity with
+    can construct balanced subsets of up to 100 images/identity with
     custom train/holdout splits.
 
     Columns: identity_id, age, gender, arcface_similarity, pose,

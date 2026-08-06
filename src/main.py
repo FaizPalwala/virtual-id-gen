@@ -99,7 +99,6 @@ def main(cfg: DictConfig) -> None:
                 cfg.dataset.imagesperidentity,
                 holdout_frac,
                 min_holdout,
-                cfg.dataset.get("forget_distribution", "uniform"),
             ),
         )
 
@@ -113,13 +112,11 @@ def main(cfg: DictConfig) -> None:
                 str(embeddings),
                 str(dataset),
                 nforget,
-                forget_steps,
                 cfg.dataset.seed,
                 holdout_frac,
                 min_holdout,
                 cfg.dataset.imagesperidentity,
                 cfg.dataset.candidatesperidentity,
-                forget_distribution=cfg.dataset.get("forget_distribution", "uniform"),
             ),
         )
 

@@ -50,3 +50,21 @@ def test_build_preserves_legacy_csv_schema(tmp_path):
     assert all(s == {"train", "holdout"} for s in subsets), subsets.to_dict()
     # Identity-level split isolation: exactly one split per identity.
     assert result.groupby("identity_id")["split"].nunique().eq(1).all()
+    # Bench strips prompt metadata (no pose/expression/lighting/setting/camera).
+    for col in ("pose", "expression", "lighting", "setting", "camera"):
+        assert col not in result.columns, f"{col} should not exist in bench"
+
+    # ── BOTH forget schedules ship as columns ──
+    # uniform `forget_step`: equal ids per step (1 forget id over 15 steps
+    # with nforget=1 → step 0 carries it; -1 elsewhere is retain).
+    forget = result[result["split"] == "forget"]
+    assert len(forget) == 2  # 1 forget identity × 2 images
+    steps = forget["forget_step"].unique()
+    assert len(steps) == 1 and 0 <= steps[0] < 15
+    # poisson `forget_step_poisson`: same forget set, valid step range.
+    psteps = forget["forget_step_poisson"].unique()
+    assert len(psteps) == 1 and 0 <= psteps[0] < 15
+    # Retain rows carry -1 in both schedule columns.
+    retain = result[result["split"] == "retain"]
+    assert (retain["forget_step"] == -1).all()
+    assert (retain["forget_step_poisson"] == -1).all()

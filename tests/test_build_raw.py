@@ -2,7 +2,7 @@
 
 The Raw release is the general-purpose 1024×1024 reference: all
 candidates per identity, NO split protocol (no split / forget_step /
-forget_variant / image_subset columns).
+forget_step_poisson / image_subset columns).
 """
 import pandas as pd
 
@@ -20,14 +20,14 @@ def test_raw_is_max_size_without_splits(dataset_inputs):
 
     # All candidates shipped, no quality trim.
     assert len(df) == dataset_inputs["n_ids"] * dataset_inputs["candidates_per_id"]
-    assert df.groupby("identity_id").size().nunique() == 1  # uniform 85/id
+    assert df.groupby("identity_id").size().nunique() == 1  # uniform 100/id
     assert df["identity_id"].nunique() == dataset_inputs["n_ids"]
 
     # Exactly the documented columns — nothing else.
     assert list(df.columns) == RAW_OUTPUT_COLUMNS
 
     # No split protocol columns exist at all.
-    for col in ("split", "forget_step", "forget_variant", "image_subset",
+    for col in ("split", "forget_step", "forget_step_poisson", "image_subset",
                 "laplacian_variance", "detection_confidence", "popularity_bin"):
         assert col not in df.columns, f"{col} should not exist in Raw"
 

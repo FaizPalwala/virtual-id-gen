@@ -18,12 +18,10 @@ dataset:
   holdout_frac: 0.20
   # floor — thin datasets never get probe‑breaking holdouts
   min_holdout: 5
-  # how forget identities are spread across forget_steps:
-  #   "uniform" (baseline) — equal per-step counts, step index == cumulative
-  #   "poisson" (variant)  — seeded Poisson batch sizes modelling GDPR-style
-  #                          deletion request streams (arXiv:2507.15280,
-  #                          arXiv:2012.01668); evaluate by cumulative count
-  forget_distribution: uniform
+  # forget schedules (balanced ships BOTH as columns): `forget_step`
+  # uniform baseline (step index == cumulative count) and
+  # `forget_step_poisson` seeded arrival-model stress test
+  # (arXiv:2507.15280, arXiv:2012.01668; evaluate by cumulative count).
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false

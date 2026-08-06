@@ -129,7 +129,11 @@ def validate(
                 f"(schema def '{schema_def}')"
             )
     else:
-        missing_cols = {"image_path", "identity_id", "age_group", "split", "forget_step"} - set(df.columns)
+        # Fallback minimal column set (when no schema def supplied): the
+        # bench core + quality columns.  Forget-schedule columns are
+        # optional — imbalanced strips them by design.
+        missing_cols = {"image_path", "identity_id", "age_group", "split",
+                        "image_subset"} - set(df.columns)
         if missing_cols:
             failures.append(f"Missing base columns: {missing_cols}")
 
@@ -181,9 +185,10 @@ def validate(
                 f"{multi_split.index.tolist()[:10]}"
             )
 
-    # ---- 6. Forget step validity (Bench only) ----
+    # ---- 6. Forget step validity (balanced only — imbalanced strips
+    #          schedule columns by design) ----
     forget_df = df[df["split"] == "forget"] if "split" in df.columns else df.iloc[0:0]
-    if len(forget_df) > 0:
+    if len(forget_df) > 0 and "forget_step" in df.columns:
         invalid_steps = set(forget_df["forget_step"]) - set(range(-1, 100))
         if invalid_steps:
             failures.append(f"Invalid forget_step values: {invalid_steps}")
