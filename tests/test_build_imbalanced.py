@@ -13,6 +13,7 @@ import pandas as pd
 from build_dataset import (
     _compute_holdout_size,
     _distribute_forget,
+    _distribute_forget_poisson,
     build_dataset,
     build_imbalanced_dataset,
 )
@@ -43,6 +44,45 @@ def test_distribute_forget_uniform_plus_remainder():
     # Variants are 0-based within each step
     for step, variant in mapping.values():
         assert variant == sum(1 for s, v in mapping.values() if s == step and v < variant)
+
+
+def test_distribute_forget_poisson_totals_and_shape():
+    """Seeded-Poisson forget-variant contract.
+
+    Same 15 steps and same total forget set as uniform, but per-step counts
+    follow the deletion-request arrival distribution (arXiv:2507.15280,
+    arXiv:2012.01668).  The schedule must be reproducible from its seed and
+    MUST NOT be uniform (that's the whole point of the variant).
+    """
+    ids = list(range(75))
+    rng = np.random.RandomState(42)
+    mapping = _distribute_forget_poisson(ids, 75, 15, rng)
+    steps = [s for s, _ in mapping.values()]
+
+    # Total forget set preserved: every id assigned, exactly once.
+    assert len(mapping) == 75
+    assert sorted(mapping.keys()) == ids
+
+    # Exactly 15 steps, all within range.
+    assert len(set(steps)) == 15
+    assert set(steps) == set(range(15))
+
+    # Per-step counts sum to nforget.
+    counts = pd.Series(steps).value_counts().sort_index()
+    assert counts.sum() == 75
+
+    # The variant is NOT uniform — steps carry different batch sizes.
+    assert counts.nunique() > 1, f"expected non-uniform schedule, got {counts.to_dict()}"
+
+    # Reproducible: same seed → identical schedule.
+    rng2 = np.random.RandomState(42)
+    mapping2 = _distribute_forget_poisson(list(range(75)), 75, 15, rng2)
+    assert mapping == mapping2
+
+    # Different seed → (overwhelmingly likely) different schedule.
+    rng3 = np.random.RandomState(7)
+    mapping3 = _distribute_forget_poisson(list(range(75)), 75, 15, rng3)
+    assert mapping != mapping3
 
 
 def test_imbalanced_holdout_and_gradient(dataset_inputs):

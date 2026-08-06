@@ -26,7 +26,9 @@ datasets** built from CC0 synthetic SFHQ seed images via an InstantID +
 Juggernaut-XL-v9 + ControlNet pipeline.  Each of the 750 synthetic identities
 is a deletion unit — all images of a single identity share one identity-level
 `split` (`retain` or `forget`), and 75 identities are assigned to a
-sequential 15-step forgetting protocol (5 identities per step).
+sequential 15-step forgetting protocol (uniform 5/step baseline; an optional
+seeded-Poisson forget-variant models GDPR-style deletion request arrival —
+Ginart et al., 2019; arXiv:2012.01668; Shen et al., 2025, arXiv:2507.15280).
 
 **MUFAC-aligned evaluation:** every identity contributes **both** per-image
 `image_subset` values (`train` + `holdout`).  There is no identity-disjoint
@@ -70,7 +72,7 @@ are possible and must be acknowledged.**
 | **Resolution** | 224×224 |
 | **Format** | JPEG (uint8 BGR storage) |
 | **Splits (both variants)** | Retain: 675 identities<br>Forget: 75 identities<br>(per-image `image_subset`: train + holdout within each) |
-| **Forget protocol** | 15 steps, 5 identities per step (uniform + remainder) |
+| **Forget protocol** | 15 steps, 75 identities — uniform 5/step (baseline) or seeded-Poisson batches (variant; evaluate by cumulative count) |
 
 ### Labels
 

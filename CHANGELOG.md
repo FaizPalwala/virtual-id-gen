@@ -37,7 +37,12 @@ The fix-run is pending on Aire (see Fixed → seed partition below).
   `retain` (675) or `forget` (75); no identity-disjoint `test` split
   (unseen-identity accuracy was structurally 0).
 - **Sequential forgetting protocol**: 15 steps × 5 identities, uniform +
-  remainder; `forget_step` / `forget_variant` columns.
+  remainder (baseline); optional **seeded-Poisson forget-variant**
+  (`forget_distribution=poisson`) with per-step counts drawn from
+  λ=5 Poisson rebalanced to total 75 — models GDPR-style deletion
+  request arrival (Ginart et al., 2019; arXiv:2012.01668;
+  Shen et al., 2025, arXiv:2507.15280); evaluate by cumulative count.
+  `forget_step` / `forget_variant` columns.
 - **Three dataset artifacts** across two releases:
   `dataset.csv` / `dataset_imbalanced.csv` (Bench 224) and
   `dataset_raw.csv` (Raw 1024).

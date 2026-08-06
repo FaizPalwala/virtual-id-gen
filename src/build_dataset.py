@@ -105,6 +105,10 @@ def _distribute_forget(
 
     Returns ``{identity_id: (step, variant)}`` where *step* is 0-based and
     *variant* is the index within the step.
+
+    Uniform is the MUFAC baseline: every step deletes the same number of
+    identities, so per-step evaluation curves are directly comparable and
+    step index == cumulative forgotten count (no batch-size confound).
     """
     base = nforget // forget_steps
     remainder = nforget % forget_steps
@@ -116,6 +120,58 @@ def _distribute_forget(
         for variant in range(count):
             mapping[forget_ids[pos]] = (step, variant)
             pos += 1
+    return mapping
+
+
+def _distribute_forget_poisson(
+    forget_ids: list[int], nforget: int, forget_steps: int, rng: np.random.RandomState,
+) -> dict[int, tuple[int, int]]:
+    """Assign forget identities to steps with a seeded Poisson batch schedule.
+
+    Models real-world data-deletion request streams: erasure requests under
+    GDPR-style regimes arrive as an (approximately) independent arrival
+    process, so batching them into fixed windows yields Poisson-distributed
+    batch sizes — occasional near-empty steps and occasional bursts
+    (Ginart et al., 2019 "Making AI Forget You"; the online-forgetting
+    framing of arXiv:2012.01668).
+
+    This is the "forget-variant" stress test: same number of steps, same
+    total forget set, but per-step counts follow the arrival distribution.
+    Downstream evaluation MUST compare schedules by cumulative forgotten
+    count, not step index, because step index no longer equals cumulative
+    count (Shen et al., 2025 "Machine Unlearning for Streaming Forgetting",
+    arXiv:2507.15280 — the total variation between consecutive forget sets,
+    V_T, is what drives difficulty).
+
+    Implementation: draw forget_steps Poisson(lambda=nforget/forget_steps)
+    counts, then rebalance by adding/removing one identity at a time from
+    randomly chosen steps until the total is exactly nforget.  Seeded via
+    *rng*, so the schedule is a fixed dataset property (recorded in
+    RELEASE_MANIFEST.json), not a runtime variable.
+
+    Returns ``{identity_id: (step, variant)}`` as in :func:`_distribute_forget`.
+    """
+    lam = nforget / forget_steps
+    counts = [int(rng.poisson(lam)) for _ in range(forget_steps)]
+
+    # Rebalance to exactly nforget while preserving the Poisson shape.
+    diff = nforget - sum(counts)
+    while diff != 0:
+        step = rng.randint(forget_steps)
+        if diff > 0:
+            counts[step] += 1
+            diff -= 1
+        elif counts[step] > 0:
+            counts[step] -= 1
+            diff += 1
+
+    mapping: dict[int, tuple[int, int]] = {}
+    pos = 0
+    for step, count in enumerate(counts):
+        for variant in range(count):
+            mapping[forget_ids[pos]] = (step, variant)
+            pos += 1
+    assert pos == nforget, f"Poisson schedule misplaced {nforget - pos} identities"
     return mapping
 
 
@@ -167,11 +223,17 @@ def build_dataset(
     imagesperidentity: int = 90,
     holdout_frac: float = 0.20,
     min_holdout: int = 5,
+    forget_distribution: str = "uniform",
 ) -> str:
     """Build the balanced 224x224 crop dataset with MUFAC-aligned splits.
 
     Every identity contributes to both training and evaluation via the
     ``image_subset`` column, replacing the old identity-disjoint ``test`` split.
+
+    ``forget_distribution`` selects how forget identities are spread over
+    steps: ``"uniform"`` (MUFAC baseline, equal per-step counts) or
+    ``"poisson"`` (seeded Poisson batch sizes modelling GDPR-style deletion
+    request streams — see :func:`_distribute_forget_poisson`).
     """
     manifest = pd.read_csv(Path(identitydir) / "identitymanifest.csv")
     attributes = _load_attributes(embeddingsdir)
@@ -254,8 +316,13 @@ def build_dataset(
             final.at[idx, "image_subset"] = value
     final["image_subset"] = final["image_subset"].fillna("train")
 
-    # Distribute forget identities across steps with uniform base + remainder.
-    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng)
+    # Distribute forget identities across steps (uniform baseline, or the
+    # seeded-Poisson forget-variant).
+    step_map = (
+        _distribute_forget(forget_ids, nforget, forget_steps, rng)
+        if forget_distribution == "uniform"
+        else _distribute_forget_poisson(forget_ids, nforget, forget_steps, rng)
+    )
     final["forgetstep"] = (
         final["identity_id"].map(
             {cid: step for cid, (step, _) in step_map.items()}
@@ -428,6 +495,7 @@ def build_imbalanced_dataset(
     high_bin_pct: float = 0.10,
     low_bin_pct: float = 0.60,
     train_gradient_ratio: dict[str, float] | None = None,
+    forget_distribution: str = "uniform",
 ) -> str:
     """Build the imbalanced 224x224 dataset with MUFAC-aligned splits.
 
@@ -579,8 +647,12 @@ def build_imbalanced_dataset(
             imbalanced.at[idx, "image_subset"] = "holdout" if j < n_hold else "train"
     imbalanced["image_subset"] = imbalanced["image_subset"].fillna("train")
 
-    # Forget step distribution (same algorithm as balanced).
-    step_map = _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
+    # Forget step distribution (same algorithm + distribution as balanced).
+    step_map = (
+        _distribute_forget(forget_ids, nforget, forget_steps, rng_split)
+        if forget_distribution == "uniform"
+        else _distribute_forget_poisson(forget_ids, nforget, forget_steps, rng_split)
+    )
     imbalanced["forgetstep"] = (
         imbalanced["identity_id"].map(
             {cid: step for cid, (step, _) in step_map.items()}

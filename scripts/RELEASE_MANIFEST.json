@@ -43,7 +43,9 @@
   "identity_count": 750,
   "splits": {
     "retain": {"identities": 675},
-    "forget": {"identities": 75, "steps": 15, "per_step": 5},
+    "forget": {"identities": 75, "steps": 15, "per_step": 5,
+               "distribution": "uniform",
+               "variant": "poisson (seeded, lambda=5, rebalanced to 75; evaluate by cumulative count — Ginart et al. 2019, arXiv:2012.01668, arXiv:2507.15280)"},
     "image_subset": {"train": "per-identity train images", "holdout": "per-identity held-out evaluation images"}
   },
   "shared_invariant": "Every identity_id maps to exactly one split (retain|forget) and contributes BOTH image_subset values (train|holdout) in the Bench releases. Raw has no splits.",

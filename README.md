@@ -36,7 +36,7 @@ The project publishes **two complementary datasets** (see
 | **Images per identity** | 90 (Bench balanced) / 100 (Raw) / variable (Bench imbalanced, ratio-based gradient) |
 | **Total images** | 67,500 (Bench balanced) / 36,075 (Bench imbalanced) / 75,000 (Raw) |
 | **Splits** | Retain 675, Forget 75 identities; per-image `image_subset` (train + holdout) |
-| **Forget protocol** | 15 steps, 5 identities per step (uniform) |
+| **Forget protocol** | 15 steps, 75 forget identities — uniform 5/step (baseline) or seeded-Poisson batches (variant) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_variant`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence`, plus 5 metadata columns |
 | **Labels (imbalanced)** | plus `popularity_bin`, `images_per_identity` on the 224 variant |
 | **Metadata format** | CSV + Parquet |
@@ -55,15 +55,28 @@ InstantID solves both problems:
   Juggernaut-XL-v9 introduce controlled identity-preserving variation.  We do
   not claim the images are "anonymous" or "privacy-safe"; synthetic does not
   mean risk-free, and residual likeness or memorisation is possible.
-- **Identity clusters are deletion units.**  All 75 images of identity 37 share
+- **Identity clusters are deletion units.**  All 90 images of identity 37 share
   the same `identity_id`, the same `split`, and (if `forget`) the same
   `forget_step`.  An unlearning system must genuinely erase a *person* rather
   than scattered pixels.
-- **Sequential forget protocol.**  60 identity clusters are deleted over 15
-  steps (4 identities per step at constant distribution; configurable),
-  modelling real-world incremental deletion requests (GDPR / CCPA).
+- **Sequential forget protocol.**  75 identity clusters are deleted over 15
+  steps, modelling real-world incremental deletion requests (GDPR / CCPA).
+  Two schedules ship (configurable via `dataset.forget_distribution`):
+  - `uniform` (baseline) — 5 identities per step, equal counts.  Step index
+    == cumulative forgotten count, so per-step curves are directly
+    comparable with no batch-size confound.
+  - `poisson` (variant) — per-step counts drawn from a **seeded Poisson**
+    distribution (λ = 5), rebalanced to total 75.  Models the arrival
+    process of real deletion-request streams: occasional near-empty steps
+    and occasional bursts (Ginart et al., 2019; arXiv:2012.01668; the
+    streaming-forgetting framework of Shen et al., 2025, arXiv:2507.15280
+    shows step-to-step total variation drives unlearning difficulty).
+    Evaluation MUST compare schedules by cumulative forgotten count, not
+    step index, since step index no longer equals cumulative count.
+    The schedule is a fixed dataset property (seeded, recorded in
+    `RELEASE_MANIFEST.json`), not a runtime variable.
 - **Imbalanced variant.**  A companion ``dataset_imbalanced.csv`` uses the
-  same identities but prunes images to a 3-bin gradient (68:39:20 train
+  same identities but prunes images to a 3-bin gradient (82:41:16 train
   counts with default ratios; configurable), with constant holdout per bin.
   Evaluators measure unlearning difficulty as a function of
   per-identity representation, mirroring real-world long-tail distributions.
@@ -111,7 +124,8 @@ four dataset pairs from a single pipeline run.
 | `dataset.imagesperidentity` | 90 | Final images per identity |
 | `dataset.candidatesperidentity` | 100 | Candidates generated per identity |
 | `dataset.forget_pct` | 0.10 | Fraction of identities in forget set |
-| `dataset.forget_steps` | 15 | Unlearning steps (uniform distribution) |
+| `dataset.forget_steps` | 15 | Unlearning steps |
+| `dataset.forget_distribution` | `uniform` | `"uniform"` (baseline: equal 5/step) or `"poisson"` (variant: seeded Poisson batch sizes modelling GDPR-style deletion request streams; evaluate by cumulative count) |
 | `dataset.holdout_frac` | 0.20 | Fraction of each identity's images for holdout evaluation |
 | `dataset.min_holdout` | 5 | Minimum holdout images per identity (floor) |
 | `dataset.skip_download` | false | Skip Kaggle download if data exists locally |
