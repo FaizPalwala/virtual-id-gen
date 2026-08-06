@@ -22,9 +22,10 @@ echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,me
 # ------------------------------------------------------------------
 # Each array task generates 50 identities with a unique random seed.
 # 750 identities across 15 shards (5 concurrent HPC job slots × 3 waves).
-# Seeds are pre-partitioned on the Mac into seeds/shard_00/ through
-# seeds/shard_14/ — each shard copies ONLY its own 50 seeds.  This
-# prevents the seed-reuse bug (v1.0.0 run: 397 unique seeds for 600 ids).
+# Seed partition is computed IN-GENERATE: every shard independently
+# shuffles the loose 750-seed pool (srand 7, same as partition_seeds.sh)
+# and takes its round-robin slice — no Mac-side step, no cross-shard
+# seed reuse (v1.0.0 bug: 397 unique seeds from 600 identities).
 #
 # Shard  0 (seed=42): identities   0– 49
 # Shard  1 (seed=44): identities  50– 99
@@ -121,24 +122,39 @@ cd "$SHARD_TMPDIR/repo/src"
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_DATA/seeds"
 
-# Seeds are pre-partitioned on the Mac: seeds/shard_00/ … seeds/shard_14/.
-# Each shard copies ONLY its own 50-seed partition, guaranteeing no
-# cross-shard seed reuse (the v1.0.0 bug: all shards shared the full pool,
-# producing 397 distinct seeds for 600 identities — see CHANGELOG).
-SHARD_SEEDS="$SHARD_TMPDIR/data/seeds/shard_$(printf '%02d' ${SLURM_ARRAY_TASK_ID})"
-if [ -d "$SHARD_SEEDS" ]; then
-    mkdir -p "$SHARD_DATA/seeds"
-    cp "$SHARD_SEEDS/"*.jpg "$SHARD_DATA/seeds/"
-    echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Copied $(ls "$SHARD_DATA/seeds/"*.jpg | wc -l) seeds from shard partition"
-else
-    # Fallback — if partitioned seeds aren't available (e.g. smoke-test
-    # run), the full pool is the escape hatch (but this reintroduces the
-    # reuse bug; only for testing, never for the release run).
-    echo "[WARN]  Shard ${SLURM_ARRAY_TASK_ID}: No seed partition found at $SHARD_SEEDS; falling back to full pool (seed-reuse risk!)"
-    if [ ! -d "$SHARD_DATA/seeds" ] || [ -z "$(ls -A "$SHARD_DATA/seeds" 2>/dev/null)" ]; then
-        cp -r "$SHARD_TMPDIR/data/seeds/." "$SHARD_DATA/seeds/"
-    fi
+# Deterministic in-generate seed partition — NO Mac-side step needed.
+# Every array task independently computes the SAME shuffle (srand 7) of
+# the full loose seed pool and takes the round-robin slice for its shard
+# id.  Identical scheme to partition_seeds.sh, so seed→shard assignment
+# is reproducible and consistent whether or not the Mac-side script ran.
+# Guarantees no cross-shard seed reuse (the v1.0.0 bug: all shards shared
+# the full pool, producing 397 distinct seeds for 600 identities).
+NSHARDS=15
+SEED_PICK=$(mktemp)
+ls "$SHARD_TMPDIR/data/seeds"/seed_*.jpg 2>/dev/null | sort | perl -e '
+use List::Util qw(shuffle);
+srand(7);
+while (<STDIN>) { chomp; push @seeds, $_; }
+my @shuffled = shuffle(@seeds);
+my $nshards = shift;
+my $shard = shift;
+for my $i (0 .. $#shuffled) {
+    print "$shuffled[$i]\n" if $i % $nshards == $shard;
+}
+' "$NSHARDS" "$SLURM_ARRAY_TASK_ID" > "$SEED_PICK"
+
+n_seeds=$(wc -l < "$SEED_PICK")
+if [ "$n_seeds" -lt 50 ]; then
+    echo "[ERROR] Shard ${SLURM_ARRAY_TASK_ID}: only $n_seeds seeds in partition "
+          "(need ≥50).  Is the full 750-seed pool present at "
+          "$SHARD_TMPDIR/data/seeds?"
+    rm -f "$SEED_PICK"
+    exit 1
 fi
+mkdir -p "$SHARD_DATA/seeds"
+while read -r s; do cp "$s" "$SHARD_DATA/seeds/"; done < "$SEED_PICK"
+rm -f "$SEED_PICK"
+echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: $n_seeds seeds via in-generate partition"
 
 python main.py --config-name step2_generate \
     dataset.dataroot="$SHARD_DATA" \
