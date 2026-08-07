@@ -52,8 +52,7 @@ def dataset_inputs(tmp_path):
                 "laplacian_variance": 100.0 + trial,
             })
             cand_rows.append({
-                "identityid": cid,
-                "clusterid": cid,
+                "identity_id": cid,
                 "trial": trial,
                 "raw_candidatepath": f"candidates/identity_{cid:03d}/candidate_{trial:03d}.png",
                 "seedpath": f"seeds/seed_{cid:03d}.png",
@@ -77,7 +76,7 @@ def dataset_inputs(tmp_path):
     np.save(embeddings / "genders.npy", np.zeros(n, dtype=np.int8))
     np.save(embeddings / "embeddings.npy", emb)
     np.save(embeddings / "identity_ids.npy",
-            np.array([r["clusterid"] for r in cand_rows]))
+            np.array([r["identity_id"] for r in cand_rows]))
 
     return {
         "root": str(root),

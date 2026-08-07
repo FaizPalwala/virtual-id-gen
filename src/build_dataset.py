@@ -365,9 +365,14 @@ def build_dataset(
     if not raw_manifest.exists():
         raw_manifest = Path(identitydir) / "identities" / "raw_candidate_manifest.csv"
     if raw_manifest.exists():
+        raw_df = pd.read_csv(raw_manifest)
+        # The merge step (merge_shards.py) remaps shard-local ids into the
+        # global 0..N range under `identity_id` — older manifests may still
+        # use `clusterid`.  Same fallback as _load_candidate_metadata.
+        id_col = "identity_id" if "identity_id" in raw_df.columns else "clusterid"
         seeds = (
-            pd.read_csv(raw_manifest)[["clusterid", "seedpath"]]
-            .rename(columns={"clusterid": "identity_id"})
+            raw_df[[id_col, "seedpath"]]
+            .rename(columns={id_col: "identity_id"})
             .drop_duplicates("identity_id")
             .set_index("identity_id")
             .seedpath
