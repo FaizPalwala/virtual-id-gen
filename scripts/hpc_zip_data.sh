@@ -32,7 +32,7 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 du -sh "$DATA_DIR"
 echo "[$(date)] Scratch space:"
-df -h /scratch | tail -1
+df -h /scratch 2>/dev/null | tail -1 || echo "  (df unavailable for /scratch — continuing)"
 echo "[$(date)] Cores allocated: ${SLURM_CPUS_PER_TASK:-8}"
 
 echo ""
