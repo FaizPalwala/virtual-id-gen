@@ -81,6 +81,20 @@ def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
     """
     from common import normalised_cosine_similarity
 
+    # Guard: rows without an embedding (extract skips faces it cannot
+    # detect) produce NaN, which np.dot propagates into a length-N NaN
+    # array and float() crashes with a cryptic TypeError.  Fail loudly
+    # with the offending rows instead.
+    missing = final["embedding"].isna()
+    if missing.any():
+        bad = final.loc[missing, ["identity_id", "trial"]].drop_duplicates()
+        raise ValueError(
+            f"{missing.sum()} rows have no embedding (extract skipped their "
+            f"candidates — no detectable face).  First offenders: "
+            f"{bad.head(5).to_dict('records')}.  Drop these rows before "
+            f"computing similarity, or re-run extraction."
+        )
+
     # Mean embedding per cluster (embeddings are already L2-normalised).
     means = final.groupby("identity_id")["embedding"].mean()
     final["arcface_similarity"] = [
@@ -796,6 +810,18 @@ def build_raw_dataset(
     metadata = _load_candidate_metadata(identitydir)
     if not metadata.empty:
         final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
+
+    # Drop candidates extract could not embed (no detectable face) BEFORE
+    # similarity: they cannot ship (arcface_similarity is a required column)
+    # and NaN embeddings crash _add_arcface_similarity with a cryptic
+    # TypeError.  The raw release is "max-size among embeddable portraits" —
+    # the summary records the drop so the manifest stays honest.
+    n_pre = len(final)
+    final = final[final["embedding"].notna()].copy()
+    n_dropped = n_pre - len(final)
+    if n_dropped:
+        print(f"[build_raw_dataset] dropped {n_dropped}/{n_pre} candidates "
+              f"without embeddings (extract skipped undetectable faces)")
 
     final = _add_arcface_similarity(final)
     identities = sorted(final["identity_id"].unique())
