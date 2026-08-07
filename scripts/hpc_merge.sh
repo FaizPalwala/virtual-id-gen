@@ -3,7 +3,7 @@
 # hpc_merge.sh — Merge 15 shard outputs into unified identities/
 # ==========================================
 #SBATCH --job-name=msc_merge
-#SBATCH --time=00:30:00
+#SBATCH --time=02:30:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --output=logs/%x_%j.out
