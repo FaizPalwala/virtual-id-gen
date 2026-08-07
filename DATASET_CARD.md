@@ -171,7 +171,7 @@ arXiv:2507.15280).  The retrain-oracle definition follows Bourtoule et al.,
 | **Identities** | 750 |
 | **Images per identity** | 100 (all portraits, no quality trim) |
 | **Resolution** | 1024×1024 |
-| **Format** | PNG |
+| **Format** | JPEG q95 (4:4:4 chroma; re-encoded from PNG at release time — see `make_release_manifest.py`) |
 | **Splits** | None (max-size reference; consumers construct their own train/holdout) |
 | **Forget protocol** | None |
 
@@ -179,7 +179,7 @@ arXiv:2507.15280).  The retrain-oracle definition follows Bourtoule et al.,
 
 | Column | Type | Description |
 |---|---|---|
-| `image_path` | string | `images/identity_NNN/portrait_YYY.png` |
+| `image_path` | string | `images/identity_NNN/portrait_YYY.jpg` |
 | `identity_id` | int | 0–749 |
 | `age_group` / `age` / `gender` | int | Proxy demographics from 1024 detection |
 | `arcface_similarity` | float | Cosine similarity to identity's mean portrait embedding |

@@ -281,7 +281,7 @@ of up to 100 images/identity with their own train/holdout splits.
 
 | Column | Type | Description |
 |---|---|---|
-| `image_path` | string | Relative path: `images/identity_NNN/portrait_YYY.png` |
+| `image_path` | string | Relative path: `images/identity_NNN/portrait_YYY.jpg` |
 | `identity_id` | int (0–749) | Synthetic identity cluster ID |
 | `age_group` | int (0–3) | Proxy age label |
 | `age` | int | Raw InsightFace age estimate |

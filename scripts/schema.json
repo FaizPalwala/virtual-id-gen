@@ -67,8 +67,8 @@
       "properties": {
         "image_path": {
           "type": "string",
-          "description": "Release-relative path to the 1024x1024 portrait, e.g. images/identity_037/portrait_012.png",
-          "pattern": "^images/identity_\\d{3}/portrait_\\d{3}\\.png$"
+          "description": "Release-relative path to the 1024x1024 portrait (JPEG q95, 4:4:4), e.g. images/identity_037/portrait_012.jpg",
+          "pattern": "^images/identity_\\d{3}/portrait_\\d{3}\\.jpg$"
         },
         "identity_id": {"type": "integer", "minimum": 0, "maximum": 749},
         "age_group": {"type": "integer", "minimum": 0, "maximum": 3},

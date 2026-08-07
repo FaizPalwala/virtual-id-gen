@@ -4,7 +4,7 @@
 Reads a dataset CSV (dataset.csv, dataset_imbalanced.csv, or
 dataset_raw.csv) produced by the HPC pipeline, rewrites every ``image_path``
 to a release-relative path of the form ``images/identity_NNN/crop_XXX.jpg``
-(Bench) or ``images/identity_NNN/portrait_YYY.png`` (Raw), and writes the
+(Bench) or ``images/identity_NNN/portrait_YYY.jpg`` (Raw), and writes the
 result back.
 
 Also validates that no stale ``/tmp/``, ``/home/``, ``seeds/``, or seed
@@ -13,7 +13,9 @@ filenames remain in the published metadata — exits non-zero if any are found.
 Pruning (--prune-images --source-root): copies only the images referenced by
 the CSV from the source tree into the release image root, so orphan
 crops/portraits never ship.  Run once per CSV with the same release root and
-the union of referenced images is materialised.
+the union of referenced images is materialised.  Raw portraits are
+RE-ENCODED PNG→JPEG q95 (4:4:4) during pruning — the shipped format is
+JPEG, the pipeline source stays PNG (see ``_convert_to_jpeg``).
 
 Example:
     python scripts/make_release_manifest.py \\
@@ -39,15 +41,16 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
 
     Pipeline-internal filenames are renamed to consumer-facing names:
     ``accepted_XXX.jpg`` → ``crop_XXX.jpg`` (bench) and
-    ``candidate_YYY.png`` → ``portrait_YYY.png`` (full).  The numeric
-    index (quality rank / trial number) is preserved.
+    ``candidate_YYY.png`` → ``portrait_YYY.jpg`` (full — re-encoded to
+    JPEG at release time).  The numeric index (quality rank / trial
+    number) is preserved.
 
     Examples
     --------
     /scratch/kxvs0578/datagen/data/processed/images/identity_037/accepted_012.jpg
         → images/identity_037/crop_012.jpg   (bench)
     /scratch/kxvs0578/datagen/data/identities/candidates/identity_037/candidate_012.png
-        → images/identity_037/portrait_012.png  (full)
+        → images/identity_037/portrait_012.jpg  (full)
     """
     p = Path(path_str)
     parts = p.parts
@@ -72,13 +75,15 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
 # "accepted_*" (preprocess quality gate) and "candidate_*" (generate output)
 # are internal jargon; the release uses consumer-facing names.  The numeric
 # index is preserved — it encodes quality rank (bench) / trial number (raw).
+# Raw portraits are RE-ENCODED PNG→JPEG q95 (4:4:4) at release time (see
+# _convert_to_jpeg) — the shipped format is JPEG, the source stays PNG.
 _PIPELINE_TO_RELEASE = {
     "bench": (re.compile(r"^accepted_(\d{3})\.jpg$"), "crop_{}.jpg"),
-    "raw": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.png"),
+    "raw": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.jpg"),
 }
 _RELEASE_TO_PIPELINE = {
     "bench": (re.compile(r"^crop_(\d{3})\.jpg$"), "accepted_{}.jpg"),
-    "raw": (re.compile(r"^portrait_(\d{3})\.png$"), "candidate_{}.png"),
+    "raw": (re.compile(r"^portrait_(\d{3})\.jpg$"), "candidate_{}.png"),
 }
 
 
@@ -108,7 +113,7 @@ FORBIDDEN_PATTERNS = [
 # forbidden in Bench (raw/full-res candidates never shipped there).
 BENCH_ONLY_PATTERNS = [
     (r"(^|/)candidate_\d{3}\.png$", "raw candidate filename in Bench release"),
-    (r"(^|/)portrait_\d{3}\.png$", "full-res portrait filename in Bench release"),
+    (r"(^|/)portrait_\d{3}\.jpg$", "full-res portrait filename in Bench release"),
 ]
 
 
@@ -131,6 +136,104 @@ def validate_no_leaked_paths(df: pd.DataFrame, release_type: str = "bench") -> N
         )
 
 
+def _convert_to_jpeg(src: Path, dst: Path, quality: int = 95) -> None:
+    """Re-encode a PNG portrait as JPEG q95 with 4:4:4 chroma.
+
+    - q95: visually lossless for natural imagery (MSE ~2 on 0-255 RGB).
+    - subsampling=0 (4:4:4): keeps full chroma resolution — skin-tone
+      fidelity matters for a face dataset; PIL's default 4:2:0 blurs it.
+    - Atomic write via temp file: a crash mid-conversion never leaves a
+      truncated JPEG at the destination.
+    - Alpha/ICC handling: portraits are RGB with no ICC (verified on real
+      data), but the code degrades gracefully if that ever changes.
+    """
+    from PIL import Image
+
+    with Image.open(src) as im:
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        else:
+            im = im.convert("RGB")
+        icc = im.info.get("icc_profile")
+        tmp = dst.with_suffix(dst.suffix + ".tmp")
+        save_kwargs = {"quality": quality, "subsampling": 0}
+        if icc:
+            save_kwargs["icc_profile"] = icc
+        im.save(tmp, "JPEG", **save_kwargs)
+        tmp.replace(dst)
+
+
+def _materialise_images(
+    paths: list[str],
+    root: Path,
+    src_base: Path,
+    source_prefix: str,
+    release_type: str,
+    prune_images: bool,
+    jpeg_quality: int = 95,
+    workers: int = 4,
+) -> None:
+    """Copy (bench) or convert+copy (raw) CSV-referenced images.
+
+    Raw portraits are re-encoded PNG→JPEG q95 at this point — the only
+    place the shipped format is decided.  Parallelism is capped at
+    ``workers`` because PNG decode is memory-bandwidth-bound; benchmarks
+    on real 1024x1024 data show 4 workers ≈ 2x single-thread and more
+    workers degrade (memory contention).
+    """
+    from concurrent.futures import ProcessPoolExecutor
+
+    jobs: list[tuple[Path, Path]] = []
+    missing: list[str] = []
+    for path in paths:
+        identity_dir, filename = path.split("/", 2)[1], path.rsplit("/", 1)[1]
+        src = src_base / source_prefix / identity_dir / source_filename(filename, release_type)
+        if not src.is_file():
+            missing.append(path)
+            continue
+        if prune_images:
+            dst = root / path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            jobs.append((src, dst))
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} normalised paths do not resolve. "
+            f"First 10: {missing[:10]}"
+        )
+    if not jobs:
+        return
+
+    if release_type == "raw":
+        # Re-encode every referenced portrait: deterministic q95, 4:4:4.
+        done = 0
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(_convert_to_jpeg, src, dst, jpeg_quality)
+                for src, dst in jobs
+            ]
+            failures: list[str] = []
+            for fut in futures:
+                try:
+                    fut.result()
+                except Exception as exc:  # noqa: BLE001 — collect all
+                    failures.append(f"{exc}")
+                done += 1
+                if done % 5000 == 0:
+                    print(f"  converted {done}/{len(jobs)}")
+        if failures:
+            raise RuntimeError(
+                f"{len(failures)}/{len(jobs)} portrait conversions failed. "
+                f"First 5: {failures[:5]}"
+            )
+        print(f"Re-encoded {len(jobs)} portraits PNG→JPEG q95 (4:4:4)")
+    else:
+        for src, dst in jobs:
+            shutil.copy2(src, dst)
+
+
 def make_manifest(
     dataset_csv: str,
     image_root: str,
@@ -138,6 +241,8 @@ def make_manifest(
     release_type: str = "bench",
     prune_images: bool = False,
     source_root: str | None = None,
+    jpeg_quality: int = 95,
+    workers: int = 4,
 ) -> None:
     """Normalise paths, prune (optionally), and validate the dataset CSV."""
     df = pd.read_csv(dataset_csv)
@@ -173,25 +278,16 @@ def make_manifest(
 
     root = Path(image_root)
     src_base = Path(source_root) if source_root else root
-    missing: list[str] = []
-    for path in df["image_path"]:
-        # path is images/identity_NNN/file.ext — map back to source layout;
-        # the source keeps its pipeline filename (accepted_*/candidate_*).
-        identity_dir, filename = path.split("/", 2)[1], path.rsplit("/", 1)[1]
-        src = src_base / source_prefix / identity_dir / source_filename(filename, release_type)
-        if not src.is_file():
-            missing.append(path)
-            continue
-        if prune_images:
-            dst = root / path
-            if not dst.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-    if missing:
-        raise RuntimeError(
-            f"{len(missing)} normalised paths do not resolve. "
-            f"First 10: {missing[:10]}"
-        )
+    _materialise_images(
+        list(df["image_path"]),
+        root,
+        src_base,
+        source_prefix,
+        release_type,
+        prune_images,
+        jpeg_quality=jpeg_quality,
+        workers=workers,
+    )
 
     output = output_csv or dataset_csv
     df.to_csv(output, index=False)
@@ -237,6 +333,18 @@ def main() -> None:
              "(e.g. the HPC data root).  Required when --prune-images is set; "
              "defaults to --image-root for verification-only runs.",
     )
+    parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=95,
+        help="JPEG quality for raw portrait re-encoding (default: 95)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Parallel conversion workers (default: 4 — memory-bandwidth bound)",
+    )
     args = parser.parse_args()
     if args.prune_images and not args.source_root:
         parser.error("--source-root is required when --prune-images is set")
@@ -247,6 +355,8 @@ def main() -> None:
         release_type=args.release_type,
         prune_images=args.prune_images,
         source_root=args.source_root,
+        jpeg_quality=args.jpeg_quality,
+        workers=args.workers,
     )
 
 

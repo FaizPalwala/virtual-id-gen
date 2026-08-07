@@ -44,7 +44,7 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"/seeds/", "local seed image directory"),
     (r"SFHQ_pt\d_", "SFHQ seed filename in path"),
     (r"(^|/)candidate_\d{3}\.png$", "raw candidate filename in Bench release"),
-    (r"(^|/)portrait_\d{3}\.png$", "full-res portrait filename in Bench release"),
+    (r"(^|/)portrait_\d{3}\.jpg$", "full-res portrait filename in Bench release"),
     (r"(^|/)accepted_\d{3}\.jpg$", "raw accepted-crop filename (pipeline name) in release"),
 ]
 
@@ -237,7 +237,7 @@ def validate(
 
     # ---- 8. No internal paths in metadata ----
     if require_relative_paths:
-        # Raw releases legitimately contain portrait_*.png (and the old
+        # Raw releases legitimately contain portrait_*.jpg (and the old
         # pipeline names candidate_*/accepted_* would also be leaks there);
         # the raw-crop checks apply to Bench only.
         patterns = FORBIDDEN_PATH_PATTERNS

@@ -30,7 +30,7 @@
       "name": "SFHQ-VirtualID-Raw",
       "resolution": [1024, 1024],
       "color_mode": "RGB",
-      "format": "PNG",
+      "format": "JPEG q95 (4:4:4; re-encoded from PNG at release time)",
       "artifacts": {
         "dataset_raw.csv/.parquet": {
           "description": "Max-size full-res portraits (no splits, no quality trim)",
