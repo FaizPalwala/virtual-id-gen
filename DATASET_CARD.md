@@ -45,8 +45,8 @@ The project publishes **two complementary releases**:
 
 | Release | Resolution | Contents | Role |
 |---|---|---|---|
-| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (67,500) + imbalanced (36,075) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (75,000, 100/id) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (67,500) + imbalanced (36,064) | Machine-unlearning benchmark (primary) |
+| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (74,999, 100/id) | General-purpose identity-conditioned faces |
 
 Both Bench variants share identical `identity_id` and `split` assignments;
 the Raw release is split-free (max-size reference).  Demographics (age,
@@ -69,7 +69,7 @@ are possible and must be acknowledged.**
 | **Images (balanced)** | 67,500 |
 | **Identities** | 750 |
 | **Images per identity (balanced)** | 90 (72 train + 18 holdout) |
-| **Images (imbalanced)** | 36,075 |
+| **Images (imbalanced)** | 36,064 |
 | **Imbalance gradient** | Ratio-based 5:1 (82:41:16 train) — high 75 ids / medium 225 / low 450; ratios {1.0, 0.50, 0.20} on an 82-train pool |
 | **Holdout** | 18 per identity in both variants (`max(min_holdout, round(imagesperidentity × holdout_frac))`) |
 | **Resolution** | 224×224 |
@@ -167,7 +167,7 @@ arXiv:2507.15280).  The retrain-oracle definition follows Bourtoule et al.,
 
 | Property | Value |
 |---|---|
-| **Images** | 75,000 |
+| **Images** | 74,999 |
 | **Identities** | 750 |
 | **Images per identity** | 100 (all portraits, no quality trim) |
 | **Resolution** | 1024×1024 |

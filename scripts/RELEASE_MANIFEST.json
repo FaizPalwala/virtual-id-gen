@@ -18,11 +18,12 @@
         },
         "dataset_imbalanced.csv/.parquet": {
           "description": "Ratio-based gradient crops, 5:1 (82:41:16 train)",
-          "images": 36075,
+          "images": 36064,
           "train_gradient_ratio": {"high": 1.0, "medium": 0.50, "low": 0.20},
           "train_per_bin": {"high": 82, "medium": 41, "low": 16},
           "holdout_per_identity": 18,
-          "kept_per_bin": {"high": 100, "medium": 59, "low": 34}
+          "kept_per_bin": {"high": 100, "medium": 59, "low": 34},
+          "exclusions": "11 high-bin rows absent vs 75x100 target: 122 candidates failed the preprocess quality gate (121 blur + 1 unreadable), capping 10 high-bin identity pools at 98-99"
         }
       }
     },
@@ -34,8 +35,9 @@
       "artifacts": {
         "dataset_raw.csv/.parquet": {
           "description": "Max-size full-res portraits (no splits, no quality trim)",
-          "images": 75000,
-          "images_per_identity": 100
+          "images": 74999,
+          "images_per_identity": 100,
+          "exclusions": "1 candidate excluded (identity_501/trial_012: image_unreadable — corrupt generation, no detectable face; see embeddingsummary.json failed=1)"
         }
       }
     }
@@ -55,7 +57,7 @@
   "shard_seeds": [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70],
   "shard_count": 15,
   "identities_per_shard": 50,
-  "git_commit": "8882f2162175a509088335dace32d1a23661f00a",
+  "git_commit": "e0c6057",
   "generation_config": {
     "base_model": "RunDiffusion/Juggernaut-XL-v9",
     "num_inference_steps": 30,
