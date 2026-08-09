@@ -1,10 +1,29 @@
+---
+pretty_name: SFHQ-VirtualID (Synthetic Face HQ — Virtual Identities)
+license: other
+license_detail: "Non-Commercial Research Licence — images and metadata (see LICENSE); MIT for code only"
+task_categories:
+  - image-classification
+  - image-to-image
+tags:
+  - machine-unlearning
+  - synthetic-faces
+  - identity-conditioned
+  - face-generation
+  - benchmark
+size_categories:
+  - 10K<n<100K
+language:
+  - en
+---
+
 # SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
 
 > **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
 > (dev → main) release summary.
 
-[![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/TODO)
-[![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/TODO)
+[![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Bench)
+[![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Raw)
 [![Bench DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
 [![Raw DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
 [![License](https://img.shields.io/badge/License-See%20LICENSE-lightgrey)](LICENSE)
