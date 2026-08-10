@@ -37,7 +37,8 @@ contributes images to both training and evaluation — no identity-level
 test split that would make test accuracy structurally degenerate.
 
 The project publishes **two complementary datasets** (see
-[`DATASET_CARD.md`](DATASET_CARD.md)):
+[`DATASET_CARD_BENCH.md`](DATASET_CARD_BENCH.md) and
+[`DATASET_CARD_RAW.md`](DATASET_CARD_RAW.md)):
 
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
@@ -386,7 +387,7 @@ The imbalanced variant answers the question: *"Does unlearning remain effective
 across the long-tail data distribution?"*  All evaluation gates use the
 **holdout** subset (never seen during training or unlearning).  The
 recommended protocol (baseline gate → distance-to-oracle → budget sweep →
-balanced cross-check; see `DATASET_CARD.md` §Evaluation protocol) guards the
+balanced cross-check; see `DATASET_CARD_BENCH.md` §Intended use) guards the
 low-bin floor effect: report per-bin MIA AUC **before** unlearning, since a
 low-bin baseline near 0.5 means "never learned", not "scrubbed".
 
@@ -431,8 +432,9 @@ for exact revisions and licence URLs.
   residual similarity between a synthetic identity and its single SFHQ seed
   image is inherent to the InstantID method.
 
-See [`DATASET_CARD.md`](DATASET_CARD.md) for full composition, intended use,
-and privacy policy.
+See [`DATASET_CARD_BENCH.md`](DATASET_CARD_BENCH.md) and
+[`DATASET_CARD_RAW.md`](DATASET_CARD_RAW.md) for full composition, intended
+use, and privacy policy.
 
 ## Reproducibility
 
