@@ -9,19 +9,19 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 > Initial release of the full pipeline + dataset.  `main` becomes the
 > release branch with this merge; everything below is what ships in v1.0.0.
 
-### Data freeze status (target — awaiting HPC re-run)
+### Data freeze status (v1.0.0 — SHIPPED)
 
-The v1 following a **seed-reuse bug** (post-fix analysis) has been
-redesigned: **750 identities × 100 candidates**, 5:1 train gradient.
-The fix-run is pending on Aire (see Fixed → seed partition below).
+750 identities × 100 candidates, 5:1 train gradient.  Frozen + verified:
+release QA 3/3 PASS, both HF repos live (private), Zenodo DOIs reserved.
 
-- **Target artifacts** (to be built + staged after HPC re-run):
-  - `SFHQ-VirtualID-Bench` — 224×224 aligned crops
+- **Shipped artifacts**:
+  - `SFHQ-VirtualID-Bench` — 224×224 aligned crops (JPEG)
     - `dataset.csv` — balanced, **67,500** images (90/id; 72 train + 18 holdout)
     - `dataset_imbalanced.csv` — ratio-based **5:1 (82:41:16)** train gradient,
-      **36,075** images (kept 100/59/34 per bin; 18 holdout/id)
-  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **75,000** images (100/id,
-    max-size, no splits)
+      **36,064** images (kept 100/59/34 per bin; 18 holdout/id; 11 high-bin
+      rows absent — 122 preprocess rejects capped 10 pools at 98–99)
+  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **74,999** images (100/id,
+    max-size, no splits; JPEG q95 4:4:4; 1 corrupt candidate excluded)
 - Holdout uniform at 18/id across all bins:
   `max(min_holdout, round(imagesperidentity × holdout_frac))` = 18/id.
 - Train gradient = 5:1 (1.0:0.50:0.20), calibrated to the VGG-Face2 range
@@ -66,8 +66,9 @@ The fix-run is pending on Aire (see Fixed → seed partition below).
 - **Release tooling**: `make_release_manifest.py` (path normalisation +
   prune-to-union), `validate_release.py` (schema + orphan + checksum gates),
   `schema.json` (3 defs), `RELEASE_MANIFEST.json` (provenance pin).
-- **Tests**: 32 unit tests covering build, common utilities, embedding
-  extraction, InstantID adapter, prompt variations, seed pool.
+- **Tests**: 39 unit tests covering build, common utilities, embedding
+  extraction, InstantID adapter, prompt variations, seed pool, release
+  validation.
 - **Documentation**: README (two-release, at-a-glance, pipeline, schema),
   `DATASET_CARD.md`, `CITATION.cff`, `THIRD_PARTY_NOTICES.md`,
   `HPC CookBook.md`, `licence_evidence/` (CC0 + OpenRAIL-M).
@@ -75,9 +76,10 @@ The fix-run is pending on Aire (see Fixed → seed partition below).
 ### Changed
 
 - **Full/candidates → Raw**: the 1024×1024 release is now
-  `SFHQ-VirtualID-Raw` (`dataset_raw.csv`, `portrait_*.png`); the imbalanced
-  variant is exclusive to Bench.  `raw_arcface_similarity` dropped (never
-  populated).
+  `SFHQ-VirtualID-Raw` (`dataset_raw.csv`, `portrait_*.jpg` — JPEG q95,
+  4:4:4 chroma, re-encoded from PNG at release build time);
+  the imbalanced variant is exclusive to Bench.  `raw_arcface_similarity`
+  dropped (never populated).
 - **Imbalance gradient**: absolute 100:59:34 counts → **ratio-based** on the
   train pool (defaults 82:41:16); holdout carved per identity (18/id).
 - **Image naming at release**: `accepted_*` → `crop_*` (Bench),
