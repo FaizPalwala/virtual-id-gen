@@ -1,25 +1,33 @@
 cff-version: 1.2.0
 title: "SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning"
-message: "If you use either release in your work, please cite this dataset entry."
+message: "If you use either release in your work, please cite the corresponding dataset entry."
 type: dataset
 authors:
-  - family-names: TODO
-    given-names: TODO
-    orcid: TODO
+  - family-names: Palwala
+    given-names: Faiz
+    orcid: 0009-0000-1426-9471
 version: 1.0.0
-date-released: 2026-07-27
-doi: TODO
+date-released: 2026-08-10
+doi: 10.5281/zenodo.21877893
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21877893
+    description: "SFHQ-VirtualID-Bench (primary benchmark release)"
+  - type: doi
+    value: 10.5281/zenodo.21879130
+    description: "SFHQ-VirtualID-Raw (full-resolution portraits)"
 url: "https://github.com/FaizPalwala/virtual-id-gen"
 repository-code: "https://github.com/FaizPalwala/virtual-id-gen"
 abstract: >
   A family of synthetic, identity-conditioned face datasets generated via
-  InstantID + Juggernaut-XL-v9 from CC0 synthetic SFHQ seed images.  600
-  synthetic identities with MUFAC-aligned split isolation (identity-level
-  retain 540 / forget 60; per-image train + holdout subsets) and a
-  sequential 15-step forgetting protocol.  Three artifacts across two
-  releases: SFHQ-VirtualID-Bench (224x224 aligned crops — 45,000 balanced
-  + 27,593 imbalanced with a ratio-based 70:40:20 train gradient) and
-  SFHQ-VirtualID-Raw (1024x1024 portraits, 51,000 images, max-size).
+  InstantID + Juggernaut-XL-v9 from CC0 synthetic SFHQ seed images.  750
+  synthetic identities with identity-level split isolation (retain 675 /
+  forget 75) and MUFAC-aligned per-image train + holdout subsets, following
+  a sequential 15-step forgetting protocol.  Two releases:
+  SFHQ-VirtualID-Bench (224x224 aligned crops — 67,500 balanced + 36,064
+  imbalanced with a ratio-based 82:41:16 train gradient, both schedules
+  uniform and seeded-Poisson) and SFHQ-VirtualID-Raw (1024x1024 portraits,
+  74,999 images, JPEG q95 4:4:4, max-size reference).
 keywords:
   - synthetic face dataset
   - machine unlearning

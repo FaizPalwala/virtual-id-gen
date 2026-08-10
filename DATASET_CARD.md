@@ -303,20 +303,20 @@ Juggernaut-XL-v9, InstantID, ControlNet, and InsightFace models.  See
 @dataset{sfhq_virtualid_bench,
   title     = {{SFHQ-VirtualID-Bench}: Synthetic Identity-Conditioned Aligned
                Face Crops for Machine Unlearning},
-  author    = {TODO},
+  author    = {Faiz Palwala},
   year      = {2026},
   version   = {1.0.0},
-  doi       = {TODO},
+  doi       = {10.5281/zenodo.21877893},
   url       = {https://github.com/FaizPalwala/virtual-id-gen},
 }
 
 @dataset{sfhq_virtualid_raw,
   title     = {{SFHQ-VirtualID-Raw}: Full-Resolution Synthetic
                Identity-Conditioned Face Portraits},
-  author    = {TODO},
+  author    = {Faiz Palwala},
   year      = {2026},
   version   = {1.0.0},
-  doi       = {TODO},
+  doi       = {10.5281/zenodo.21879130},
   url       = {https://github.com/FaizPalwala/virtual-id-gen},
 }
 ```

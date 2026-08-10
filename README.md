@@ -24,8 +24,8 @@ language:
 
 [![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Bench)
 [![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Raw)
-[![Bench DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
-[![Raw DOI](https://img.shields.io/badge/DOI-Zenodo-blue)](https://doi.org/TODO)
+[![Bench DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21877893-blue)](https://doi.org/10.5281/zenodo.21877893)
+[![Raw DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21879130-blue)](https://doi.org/10.5281/zenodo.21879130)
 [![License](https://img.shields.io/badge/License-See%20LICENSE-lightgrey)](LICENSE)
 
 A reproducible pipeline for constructing **synthetic, identity-conditioned face
@@ -457,20 +457,20 @@ Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST
 @dataset{sfhq_virtualid_bench,
   title     = {{SFHQ-VirtualID-Bench}: Synthetic Identity-Conditioned Aligned
                Face Crops for Machine Unlearning},
-  author    = {TODO},
+  author    = {Faiz Palwala},
   year      = {2026},
   version   = {1.0.0},
-  doi       = {TODO},
+  doi       = {10.5281/zenodo.21877893},
   url       = {https://github.com/FaizPalwala/virtual-id-gen},
 }
 
 @dataset{sfhq_virtualid_raw,
   title     = {{SFHQ-VirtualID-Raw}: Full-Resolution Synthetic
                Identity-Conditioned Face Portraits},
-  author    = {TODO},
+  author    = {Faiz Palwala},
   year      = {2026},
   version   = {1.0.0},
-  doi       = {TODO},
+  doi       = {10.5281/zenodo.21879130},
   url       = {https://github.com/FaizPalwala/virtual-id-gen},
 }
 ```
