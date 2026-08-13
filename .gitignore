@@ -240,5 +240,9 @@ RELEASE_TODO.md
 # consumers directly; never committed to this repo
 docs/DOWNSTREAM_CHANGES.md
 
+# Untracked local docs (dissertation feedback, hyperparameter justification,
+# etc.) — content to draw from, never published to this repo
+untracked/
+
 # macOS junk
 .DS_Store
