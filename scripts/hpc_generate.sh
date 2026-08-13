@@ -118,6 +118,24 @@ echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Running GPU Preflight..."
 bash "$SHARD_TMPDIR/repo/scripts/gpu_preflight.sh"
 
 # ==========================================
+# 4b. Prompt Plan Pre-flight (fail fast, before GPU spend)
+# ==========================================
+# Validates the 20x5 prompt grid: 100 unique prompts, per-dimension
+# diversity floors (lighting=5, pose>=10, ...), determinism.  A silent
+# collapse here costs 8 GPU-hours x 15 shards before release QA catches it
+# (RELEASE_TODO Phase D2 P1-3).  Every shard re-verifies (cheap, ~1 s).
+echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Validating prompt plan..."
+cd "$SHARD_TMPDIR/repo/src"
+PYTHONPATH="$SHARD_TMPDIR/repo/src" python "$SHARD_TMPDIR/repo/scripts/validate_prompt_plan.py" \
+    >> "$REPO_DIR/logs/generate_shard_${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.log" 2>&1
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Shard ${SLURM_ARRAY_TASK_ID}: prompt plan validation FAILED — aborting before generation"
+    exit 1
+fi
+echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: prompt plan OK"
+
+
+# ==========================================
 # 5. Generate 50 Identities (one shard)
 # ==========================================
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Starting identity generation..."

@@ -104,12 +104,95 @@ def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
     return final
 
 
-def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
-    """Load per-candidate metadata from the generate step's manifest.
+def _export_raw_jpeg(
+    df: pd.DataFrame,
+    out_root: Path,
+    dataroot: Path,
+    quality: int = 95,
+    workers: int = 4,
+) -> None:
+    """Convert shipped raw portraits PNG→JPEG q95 (4:4:4) into a release tree.
 
-    Returns a DataFrame indexed by ``identity_id`` with a single row per
-    identity (the metadata is identical for all candidates of an identity,
-    since it describes the generation prompt attributes).
+    Runs inside the build (Aire-side) so the off-node transfer bundle is
+    ~22 GB of JPEG instead of ~100 GB of PNG.  Output layout mirrors the
+    release: ``images/identity_NNN/portrait_YYY.jpg``.  Atomic temp+replace
+    per file; failures are collected and raise (a partial raw release must
+    not silently ship).
+    """
+    from concurrent.futures import ProcessPoolExecutor
+
+    def _convert_one(args: tuple[Path, Path]) -> None:
+        src, dst = args
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        _png_to_jpeg(src, dst, quality)
+
+    jobs: list[tuple[Path, Path]] = []
+    for _, row in df.iterrows():
+        # image_path is dataroot-relative (identities/candidates/...).
+        rel = row["image_path"]
+        trial = int(rel.rsplit("_", 1)[1].split(".")[0])
+        ident = rel.split("/")[-2]  # identity_NNN
+        src = dataroot / rel
+        dst = out_root / "images" / ident / f"portrait_{trial:03d}.jpg"
+        jobs.append((src, dst))
+
+    missing = [str(s) for s, _ in jobs if not s.is_file()]
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} raw candidates missing for JPEG export: "
+            f"{missing[:5]}"
+        )
+
+    done = 0
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_convert_one, j) for j in jobs]
+        failures: list[str] = []
+        for fut in futures:
+            try:
+                fut.result()
+            except Exception as exc:  # noqa: BLE001 — collect all
+                failures.append(str(exc))
+            done += 1
+            if done % 5000 == 0:
+                print(f"  [raw-jpeg] {done}/{len(jobs)}")
+    if failures:
+        raise RuntimeError(
+            f"{len(failures)}/{len(jobs)} raw JPEG exports failed. "
+            f"First 5: {failures[:5]}"
+        )
+    print(f"[OK] Raw JPEG export: {len(jobs)} portraits → {out_root / 'images'}")
+
+
+def _png_to_jpeg(src: Path, dst: Path, quality: int = 95) -> None:
+    """Re-encode a PNG portrait as JPEG q95 with 4:4:4 chroma (atomic)."""
+    from PIL import Image
+
+    with Image.open(src) as im:
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        else:
+            im = im.convert("RGB")
+        icc = im.info.get("icc_profile")
+        tmp = dst.with_suffix(dst.suffix + ".tmp")
+        save_kwargs = {"quality": quality, "subsampling": 0}
+        if icc:
+            save_kwargs["icc_profile"] = icc
+        im.save(tmp, "JPEG", **save_kwargs)
+        tmp.replace(dst)
+
+
+def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
+    """Load per-candidate prompt metadata from the generate step's manifest.
+
+    Returns a DataFrame keyed by ``(identity_id, trial)`` with one row per
+    candidate: each generated portrait carries its own variation attributes
+    (the 20×5 prompt grid gives every candidate a unique rendering
+    instruction).  A per-identity collapse here would silently report the
+    first candidate's attributes for the whole identity, contradicting the
+    prompt-diversity design — see RELEASE_TODO Phase D1.
     """
     raw = Path(identitydir) / "identities" / "raw_candidate_manifest.csv"
     if not raw.exists():
@@ -123,9 +206,19 @@ def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
     available = [c for c in metadata_cols if c in df.columns]
     if not available:
         # Older manifests without metadata columns — return empty.
-        return pd.DataFrame(index=pd.Index([], name="identity_id"))
-    return df[[id_col] + available].rename(columns={id_col: "identity_id"})\
-        .drop_duplicates("identity_id").set_index("identity_id")[available]
+        return pd.DataFrame(
+            index=pd.MultiIndex.from_arrays([[], []], names=["identity_id", "trial"])
+        )
+    key_cols = [id_col, "trial"]
+    out = df[key_cols + available].rename(columns={id_col: "identity_id"})
+    # Guard: the manifest must be per-candidate (one row per (id, trial)).
+    dup = out.duplicated(subset=["identity_id", "trial"]).sum()
+    if dup:
+        raise RuntimeError(
+            f"raw_candidate_manifest has {dup} duplicate (identity_id, trial) "
+            f"rows — cannot build per-candidate prompt metadata"
+        )
+    return out.set_index(["identity_id", "trial"])[available]
 
 
 def _distribute_forget(
@@ -782,6 +875,7 @@ def build_raw_dataset(
     embeddingsdir: str,
     outputdir: str,
     randomstate: int = 42,
+    raw_jpeg_dir: str | None = None,
 ) -> str:
     """Build the full-resolution 1024x1024 raw dataset.
 
@@ -809,7 +903,9 @@ def build_raw_dataset(
 
     metadata = _load_candidate_metadata(identitydir)
     if not metadata.empty:
-        final = final.merge(metadata, on="identity_id", how="left", validate="many_to_one")
+        final = final.merge(
+            metadata, on=["identity_id", "trial"], how="left", validate="one_to_one"
+        )
 
     # Drop candidates extract could not embed (no detectable face) BEFORE
     # similarity: they cannot ship (arcface_similarity is a required column)
@@ -825,6 +921,28 @@ def build_raw_dataset(
 
     final = _add_arcface_similarity(final)
     identities = sorted(final["identity_id"].unique())
+
+    # Airtight guard (RELEASE_TODO Phase D1): the 20×5 prompt grid gives
+    # every candidate a unique rendering instruction, so every identity's
+    # shipped portraits MUST span >1 pose/expression/lighting (the
+    # variation dimensions).  setting/camera can legitimately repeat (the
+    # grid has only 3 lenses); a metadata join collapse (per-identity
+    # instead of per-candidate) fails here at build time rather than
+    # surfacing at release QA.
+    variation_cols = [c for c in ("pose", "expression", "lighting")
+                      if c in final.columns]
+    if variation_cols:
+        min_var = final.groupby("identity_id")[variation_cols].nunique().min(axis=1)
+        collapsed = min_var.loc[lambda x: x <= 1]
+        if len(collapsed) > 0:
+            raise RuntimeError(
+                f"Prompt-metadata collapse at build: {len(collapsed)} identities "
+                f"have <=1 unique value across {variation_cols} (per-candidate "
+                f"variation missing).  First 10: {collapsed.index.tolist()[:10]}"
+            )
+        print(f"[build_raw_dataset] prompt-metadata variance OK "
+              f"(all {len(identities)} identities >1 unique pose/expr/lighting)")
+
 
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
@@ -844,6 +962,14 @@ def build_raw_dataset(
     parquet_path = output / "dataset_raw.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
+
+    # Early JPEG export (RELEASE_TODO Phase D2 P1-4): the raw release ships
+    # as JPEG q95 (4:4:4) — convert HERE, on Aire, so the off-node transfer
+    # bundle is ~22 GB instead of ~100 GB of PNG.  Same encoding as the old
+    # Mac-side make_release_manifest step, moved into the build where the
+    # format decision belongs.  Deterministic, parallel, atomic per file.
+    if raw_jpeg_dir:
+        _export_raw_jpeg(output_df, Path(raw_jpeg_dir), dataroot)
 
     max_balanced = int(output_df.groupby("identity_id").size().min())
     max_per_id = int(output_df.groupby("identity_id").size().max())

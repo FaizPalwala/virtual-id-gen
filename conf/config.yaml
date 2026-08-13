@@ -25,6 +25,11 @@ dataset:
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false
+  # Early raw JPEG export (RELEASE_TODO Phase D2 P1-4): when set, the raw
+  # build re-encodes shipped portraits PNG→JPEG q95 (4:4:4) into this dir
+  # ON AIRE, so the off-node transfer bundle is ~22 GB not ~100 GB of PNG.
+  # Null = off (Mac-side conversion via make_release_manifest, legacy path).
+  raw_jpeg_dir: null
 pipeline:
   ctxid: 0
   imgsize: 224

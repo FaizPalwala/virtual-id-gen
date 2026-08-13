@@ -3,9 +3,9 @@
 # hpc_build.sh — Phase 4: Assemble Final Dataset CSV
 # ==========================================
 #SBATCH --job-name=msc_build
-#SBATCH --time=01:00:00
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=4G
+#SBATCH --time=02:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=8G
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -16,6 +16,12 @@
 # Input:  $DATA_DIR/processed/identitymanifest.csv
 #         $DATA_DIR/embeddings/
 # Output: $DATA_DIR/dataset/dataset.csv
+#
+# ALSO exports the raw release as JPEG q95 (4:4:4) into
+# $DATA_DIR/release_raw_jpeg/ — early conversion on Aire so the off-node
+# transfer bundle is ~22 GB not ~100 GB of PNG (RELEASE_TODO Phase D2
+# P1-4).  8 CPUs for the parallel PNG→JPEG workers (memory-bound, 4
+# workers optimal per benchmark).
 # ------------------------------------------------------------------
 
 # ==========================================
@@ -41,6 +47,7 @@ cd "$REPO_DIR/src"
 
 python main.py --config-name step5_build \
     dataset.dataroot="$DATA_DIR" \
+    dataset.raw_jpeg_dir="$DATA_DIR/release_raw_jpeg" \
     > "$REPO_DIR/logs/build_${SLURM_JOB_ID}.log" 2>&1
 
 EXIT_CODE=$?

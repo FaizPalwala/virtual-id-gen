@@ -199,7 +199,39 @@ def validate(
                 f"{len(inconsistent)} forget clusters have inconsistent forget_step"
             )
 
-    # ---- 7. Image file validation ----
+    # ---- 6b. Prompt-metadata variance (raw only — per-candidate design) ----
+    # The 20×5 prompt grid gives every candidate a unique rendering
+    # instruction (RELEASE_TODO Phase D1): each identity's portraits must
+    # span multiple poses/expressions/lightings in the SHIPPED CSV.  A
+    # per-identity collapse (the D1 bug) reports one value for the whole
+    # identity — this gate makes that a release-blocking failure.
+    # setting/camera are excluded from the per-identity check (camera has
+    # only 3 lenses in the grid; setting repeats across candidates).
+    variation_cols = [c for c in ("pose", "expression", "lighting")
+                      if c in df.columns]
+    if variation_cols:
+        min_var_per_id = (
+            df.groupby("identity_id")[variation_cols]
+            .nunique()
+            .min(axis=1)  # worst variation dimension per identity
+        )
+        collapsed = min_var_per_id.loc[lambda x: x <= 1]
+        if len(collapsed) > 0:
+            failures.append(
+                f"Prompt-metadata collapse: {len(collapsed)} identities have "
+                f"<=1 unique value across {variation_cols} (per-candidate "
+                f"variation missing).  First 10: {collapsed.index.tolist()[:10]}"
+            )
+        # Dimension-level floor: pose/expression/lighting should each vary
+        # across the release as a whole (20×5 grid ⇒ ≥5 lightings).
+        global_var = df[variation_cols].nunique()
+        weak_dims = [c for c in variation_cols if global_var[c] < 5]
+        if weak_dims:
+            failures.append(
+                f"Prompt-metadata dimension floor: {weak_dims} have <5 unique "
+                f"values release-wide ({global_var.to_dict()})"
+            )
+
     missing_files: list[str] = []
     bad_size: list[tuple[str, tuple[int, int]]] = []
     bad_mode: list[tuple[str, str]] = []

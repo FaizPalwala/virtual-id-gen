@@ -31,11 +31,18 @@ def test_raw_is_max_size_without_splits(dataset_inputs):
                 "laplacian_variance", "detection_confidence", "popularity_bin"):
         assert col not in df.columns, f"{col} should not exist in Raw"
 
-    # Metadata joined per identity (same prompt grid for all candidates).
-    for col in ("pose", "expression", "lighting", "setting", "camera"):
-        assert (df[col] == "frontal").all() or (df[col] == "studio").all() or \
-            (df[col] == "backdrop").all() or (df[col] == "85mm").all() or \
-            (df[col] == "neutral").all(), f"{col} not populated from manifest"
+    # Metadata joined PER CANDIDATE (20×5 prompt grid — each portrait has
+    # its own pose/expression/lighting).  This is the contract the D1 fix
+    # restores: the old per-identity collapse reported one value per
+    # identity, which the build's variance guard now rejects.
+    for col in ("pose", "expression", "lighting"):
+        per_id_var = df.groupby("identity_id")[col].nunique()
+        assert (per_id_var > 1).all(), \
+            f"{col} is constant per identity — per-candidate metadata lost"
+    # fixture: 4 poses / 3 expressions / 5 lightings per identity
+    assert df["pose"].nunique() == 4
+    assert df["expression"].nunique() == 3
+    assert df["lighting"].nunique() == 5
 
     # Every row has real demographics + similarity.  Cosine similarity to
     # the identity mean spans (−1, 1]; the frozen release is −0.08…0.97.

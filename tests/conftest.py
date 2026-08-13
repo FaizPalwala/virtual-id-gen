@@ -42,6 +42,13 @@ def dataset_inputs(tmp_path):
 
     crop_rows = []
     cand_rows = []
+    # Per-candidate prompt metadata (20×5 grid contract): the SAME candidate
+    # must carry pose/expression/lighting variation, or the raw build's
+    # per-candidate variance guard fails (RELEASE_TODO Phase D1 — the old
+    # constant fixture masked the per-identity metadata-collapse bug).
+    poses = ["frontal", "three-quarter", "profile", "seated"]
+    exprs = ["neutral", "smile", "thoughtful"]
+    lights = ["studio", "window", "golden", "overcast", "open-shade"]
     for cid in range(n_ids):
         for trial in range(candidates_per_id):
             crop_rows.append({
@@ -56,8 +63,11 @@ def dataset_inputs(tmp_path):
                 "trial": trial,
                 "raw_candidatepath": f"candidates/identity_{cid:03d}/candidate_{trial:03d}.png",
                 "seedpath": f"seeds/seed_{cid:03d}.png",
-                "pose": "frontal", "expression": "neutral",
-                "lighting": "studio", "setting": "backdrop", "camera": "85mm",
+                "pose": poses[trial % len(poses)],
+                "expression": exprs[trial % len(exprs)],
+                "lighting": lights[trial % len(lights)],
+                "setting": "backdrop",
+                "camera": "85mm",
             })
     pd.DataFrame(crop_rows).to_csv(processed / "identitymanifest.csv", index=False)
     pd.DataFrame(cand_rows).to_csv(identities / "raw_candidate_manifest.csv", index=False)
