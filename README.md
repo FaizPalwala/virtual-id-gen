@@ -1,22 +1,3 @@
----
-pretty_name: SFHQ-VirtualID (Synthetic Face HQ — Virtual Identities)
-license: other
-license_detail: "Non-Commercial Research Licence — images and metadata (see LICENSE); MIT for code only"
-task_categories:
-  - image-classification
-  - image-to-image
-tags:
-  - machine-unlearning
-  - synthetic-faces
-  - identity-conditioned
-  - face-generation
-  - benchmark
-size_categories:
-  - 10K<n<100K
-language:
-  - en
----
-
 # SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
 
 > **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
