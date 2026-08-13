@@ -1,8 +1,7 @@
 """Shared fixtures for the SFHQ-VirtualID test suite.
 
-build_dataset imports matplotlib.pyplot at module level; force the Agg
-backend before any test module imports it so the suite runs headless on
-CI and macOS (no display server needed).
+Force the matplotlib Agg backend before any test module imports it so
+the suite runs headless on CI and macOS (no display server needed).
 """
 import matplotlib
 import numpy as np

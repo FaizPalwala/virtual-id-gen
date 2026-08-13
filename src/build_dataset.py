@@ -15,10 +15,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")  # headless backend
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -46,7 +42,6 @@ IMBALANCED_OUTPUT_COLUMNS = [
     "popularity_bin", "images_per_identity",
 ]
 
-
 def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
     """Load image-level attributes saved by extract_embeddings.py."""
     embeddings = Path(embeddingsdir)
@@ -69,7 +64,6 @@ def _load_attributes(embeddingsdir: str) -> pd.DataFrame:
     t = df["imagepath"].str.extract(r"candidate_(\d+)")[0]
     df["trial"] = pd.to_numeric(t, errors="coerce").astype("Int64")
     return df
-
 
 def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
     """Add per-image cosine similarity to the identity's mean embedding.
@@ -103,11 +97,9 @@ def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
     ]
     return final
 
-
 def _convert_one_inplace(args: tuple[Path, Path], quality: int = 95) -> None:
     """Module-level worker (picklable under macOS spawn): PNG→JPEG in place."""
     _png_to_jpeg(*args, quality)
-
 
 def _convert_candidates_inplace(
     df: pd.DataFrame,
@@ -192,7 +184,6 @@ def _convert_candidates_inplace(
     print(f"[OK] In-place raw JPEG: {len(jobs)} portraits converted, "
           f"PNGs deleted, tree is now ~22 GB")
 
-
 def _png_to_jpeg(src: Path, dst: Path, quality: int = 95) -> None:
     """Re-encode a PNG portrait as JPEG q95 with 4:4:4 chroma (atomic)."""
     from PIL import Image
@@ -212,7 +203,6 @@ def _png_to_jpeg(src: Path, dst: Path, quality: int = 95) -> None:
             save_kwargs["icc_profile"] = icc
         im.save(tmp, "JPEG", **save_kwargs)
         tmp.replace(dst)
-
 
 def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
     """Load per-candidate prompt metadata from the generate step's manifest.
@@ -250,7 +240,6 @@ def _load_candidate_metadata(identitydir: str) -> pd.DataFrame:
         )
     return out.set_index(["identity_id", "trial"])[available]
 
-
 def _distribute_forget(
     forget_ids: list[int], nforget: int, forget_steps: int, rng: np.random.RandomState,
 ) -> dict[int, tuple[int, int]]:
@@ -274,7 +263,6 @@ def _distribute_forget(
             mapping[forget_ids[pos]] = (step, variant)
             pos += 1
     return mapping
-
 
 def _distribute_forget_poisson(
     forget_ids: list[int], nforget: int, forget_steps: int, rng: np.random.RandomState,
@@ -327,7 +315,6 @@ def _distribute_forget_poisson(
     assert pos == nforget, f"Poisson schedule misplaced {nforget - pos} identities"
     return mapping
 
-
 def _to_dataroot_relative(p: str, base_dir: Path, dataroot: Path) -> str:
     """Convert a manifest image path to a dataroot-relative release path.
 
@@ -353,7 +340,6 @@ def _to_dataroot_relative(p: str, base_dir: Path, dataroot: Path) -> str:
         return str(path)
     return str((base_dir / path).relative_to(dataroot))
 
-
 def _compute_holdout_size(
     total_per_id: int, holdout_frac: float, min_holdout: int
 ) -> int:
@@ -364,7 +350,6 @@ def _compute_holdout_size(
     is independent of the train set size.
     """
     return max(min_holdout, round(total_per_id * holdout_frac))
-
 
 def build_dataset(
     identitydir: str,
@@ -489,101 +474,6 @@ def build_dataset(
     )
     final = final[final.agegroup != -1].copy()
 
-    # Cluster samples: asymmetric matplotlib grid per identity.
-    samples_root = Path(outputdir) / "cluster_samples"
-    dataroot = Path(outputdir).parent
-    if samples_root.exists():
-        import shutil
-
-        shutil.rmtree(samples_root)
-    samples_root.mkdir(parents=True)
-
-    raw_manifest = Path(identitydir).parent / "identities" / "raw_candidate_manifest.csv"
-    if not raw_manifest.exists():
-        raw_manifest = Path(identitydir) / "identities" / "raw_candidate_manifest.csv"
-    if raw_manifest.exists():
-        raw_df = pd.read_csv(raw_manifest)
-        # The merge step (merge_shards.py) remaps shard-local ids into the
-        # global 0..N range under `identity_id` — older manifests may still
-        # use `clusterid`.  Same fallback as _load_candidate_metadata.
-        id_col = "identity_id" if "identity_id" in raw_df.columns else "clusterid"
-        seeds = (
-            raw_df[[id_col, "seedpath"]]
-            .rename(columns={id_col: "identity_id"})
-            .drop_duplicates("identity_id")
-            .set_index("identity_id")
-            .seedpath
-        )
-    else:
-        seeds = pd.Series(dtype=str)
-
-    for cid in sorted(final["identity_id"].unique()):
-        split = split_map[cid]
-        (samples_root / split).mkdir(parents=True, exist_ok=True)
-
-        # Collect up to 4 images: seed + 3 examples
-        image_paths = []
-        seed_path = seeds.get(cid, None)
-        if seed_path:
-            resolved_seed = Path(seed_path)
-            if not resolved_seed.is_absolute():
-                # Manifest seedpath is relative to the data root.
-                resolved_seed = dataroot / resolved_seed
-            if resolved_seed.exists():
-                image_paths.append(str(resolved_seed))
-        examples = final[final["identity_id"] == cid].imagepath.head(3)
-        identity_root = Path(identitydir)
-        for i, img_path in enumerate(examples, 1):
-            resolved = identity_root / img_path
-            if resolved.exists():
-                image_paths.append(str(resolved))
-
-        if not image_paths:
-            continue
-
-        # Asymmetric grid: seed spans left column (3 rows), variations stack right.
-        img_list = [Image.open(p).convert("RGB") for p in image_paths]
-        cell_w, cell_h = img_list[0].size
-
-        fig = plt.figure(figsize=(10, 7.5), facecolor="#f8f9fa")
-        gs = fig.add_gridspec(
-            3, 2, width_ratios=[2.2, 1], hspace=0.25, wspace=0.15,
-        )
-        ax_seed = fig.add_subplot(gs[:, 0])  # spans all left cells
-        ax_vars = [fig.add_subplot(gs[i, 1]) for i in range(3)]
-
-        ax_seed.imshow(img_list[0])
-        ax_seed.set_title(
-            "SEED", fontsize=9, fontweight="bold", color="#c0392b", pad=4,
-        )
-        ax_seed.axis("off")
-        for spine in ax_seed.spines.values():
-            spine.set_visible(True)
-            spine.set_color("#c0392b")
-            spine.set_linewidth(3)
-
-        for i in range(1, min(4, len(img_list))):
-            ax = ax_vars[i - 1]
-            ax.imshow(img_list[i])
-            ax.set_title(f"Example {i}", fontsize=8, color="#555", pad=3)
-            ax.axis("off")
-            rect = mpatches.Rectangle(
-                (0, 0), cell_w - 1, cell_h - 1,
-                linewidth=1, edgecolor="#ccc", facecolor="none",
-            )
-            ax.add_patch(rect)
-
-        for j in range(len(img_list) - 1, 3):
-            ax_vars[j].axis("off")
-
-        fig.suptitle(
-            f"Identity {int(cid):03d} — {split.upper()}",
-            fontsize=13, fontweight="bold", y=0.97,
-        )
-        out = samples_root / split / f"identity_{int(cid):03d}.png"
-        fig.savefig(out, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-
     # ------------------------------------------------------------------
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
@@ -632,7 +522,6 @@ def build_dataset(
         )
     )
     return str(csv_path)
-
 
 def build_imbalanced_dataset(
     identitydir: str,
@@ -888,7 +777,6 @@ def build_imbalanced_dataset(
           f"{n_high} high, {n_medium} medium, {n_low} low.")
     return str(csv_path)
 
-
 # ── Candidate (full-resolution) dataset columns ──
 # Same core as OUTPUT_COLUMNS but excludes crop-level quality metrics
 # (laplacian_variance, detection_confidence) — meaningless on 1024
@@ -898,7 +786,6 @@ RAW_OUTPUT_COLUMNS = [
     "arcface_similarity", "pose", "expression", "lighting",
     "setting", "camera",
 ]
-
 
 def build_raw_dataset(
     identitydir: str,
@@ -978,7 +865,6 @@ def build_raw_dataset(
             )
         print(f"[build_raw_dataset] prompt-metadata variance OK "
               f"(all {len(identities)} identities >1 unique pose/expr/lighting)")
-
 
     output = Path(outputdir)
     output.mkdir(parents=True, exist_ok=True)
