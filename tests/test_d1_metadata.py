@@ -100,3 +100,83 @@ def test_validate_prompt_plan_go():
     )
     assert proc.returncode == 0, proc.stderr
     assert "GO" in proc.stdout
+
+
+def _materialise_candidate_pngs(dataset_inputs, size=(64, 64)):
+    """Create real PNG candidates at the fixture's identities/candidates tree.
+
+    Returns the identities root.  The manifest stores candidates relative
+    to the identities dir, so PNGs live at
+    ``<root>/identities/candidates/identity_NNN/candidate_YYY.png``.
+    """
+    from PIL import Image
+
+    root = pathlib.Path(dataset_inputs["root"])
+    identities = root / "identities"
+    man = pd.read_csv(identities / "raw_candidate_manifest.csv")
+    created = 0
+    for _, row in man.iterrows():
+        p = identities / row["raw_candidatepath"]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if not p.is_file():
+            Image.new("RGB", size, (120 + row["identity_id"] % 50,
+                                    100, 80)).save(p)
+            created += 1
+    return identities, man
+
+
+def test_inplace_jpeg_verify_then_delete(dataset_inputs):
+    """raw_jpeg_dir flag: PNGs converted in place, verified, then deleted."""
+    identities, man = _materialise_candidate_pngs(dataset_inputs)
+    result = build_raw_dataset(
+        dataset_inputs["root"],
+        dataset_inputs["embeddings"],
+        dataset_inputs["dataset"] + "_raw_inplace",
+        randomstate=42,
+        raw_jpeg_dir="1",
+        jpeg_expected_size=(64, 64),
+    )
+    df = pd.read_csv(result)
+
+    # CSV image_path rewritten .png → .jpg
+    assert df["image_path"].str.endswith(".jpg").all()
+
+    # Every original PNG deleted; every JPEG present + decodes RGB 64x64
+    from PIL import Image
+
+    checked = 0
+    for _, row in man.iterrows():
+        png = identities / row["raw_candidatepath"]
+        jpg = png.with_suffix(".jpg")
+        assert not png.exists(), f"PNG not deleted: {png}"
+        assert jpg.is_file(), f"JPEG missing: {jpg}"
+        with Image.open(jpg) as im:
+            assert im.mode == "RGB" and im.size == (64, 64)
+        checked += 1
+    assert checked == len(man)
+
+
+def test_inplace_jpeg_aborts_on_missing_png_keeps_everything(dataset_inputs):
+    """A missing source PNG aborts conversion; no PNG may be deleted."""
+    identities, man = _materialise_candidate_pngs(dataset_inputs)
+    # Delete one PNG to simulate a corrupt/missing source.
+    victim = identities / man.iloc[0]["raw_candidatepath"]
+    victim.unlink()
+
+    with pytest.raises(RuntimeError, match="missing"):
+        build_raw_dataset(
+            dataset_inputs["root"],
+            dataset_inputs["embeddings"],
+            dataset_inputs["dataset"] + "_raw_inplace_fail",
+            randomstate=42,
+            raw_jpeg_dir="1",
+            jpeg_expected_size=(64, 64),
+        )
+
+    # Phase 1 checks missing BEFORE converting, so no JPEG was created and
+    # no surviving PNG was deleted.
+    for _, row in man.iloc[1:10].iterrows():
+        jpg = identities / row["raw_candidatepath"].replace(".png", ".jpg")
+        assert not jpg.exists(), f"JPEG created despite missing source: {jpg}"
+        png = identities / row["raw_candidatepath"]
+        assert png.exists(), f"PNG deleted despite abort: {png}"

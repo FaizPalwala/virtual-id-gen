@@ -18,17 +18,15 @@ dataset:
   holdout_frac: 0.20
   # floor — thin datasets never get probe‑breaking holdouts
   min_holdout: 5
-  # forget schedules (balanced ships BOTH as columns): `forget_step`
-  # uniform baseline (step index == cumulative count) and
-  # `forget_step_poisson` seeded arrival-model stress test
-  # (arXiv:2507.15280, arXiv:2012.01668; evaluate by cumulative count).
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false
-  # Early raw JPEG export (RELEASE_TODO Phase D2 P1-4): when set, the raw
-  # build re-encodes shipped portraits PNG→JPEG q95 (4:4:4) into this dir
-  # ON AIRE, so the off-node transfer bundle is ~22 GB not ~100 GB of PNG.
-  # Null = off (Mac-side conversion via make_release_manifest, legacy path).
+  # In-place raw JPEG conversion (RELEASE_TODO Phase D2 P1-4): when set
+  # (any non-null value — enable flag), the raw build converts every
+  # shipped candidate PNG→JPEG q95 (4:4:4) IN PLACE with verify-then-delete
+  # (build_dataset._convert_candidates_inplace), so the off-node transfer
+  # bundle is ~22 GB not ~100 GB of PNG and the CSV image_path ships .jpg.
+  # Null = off (PNG source tree kept, Mac-side release conversion).
   raw_jpeg_dir: null
 pipeline:
   ctxid: 0
@@ -54,7 +52,7 @@ pipeline:
     require_cuda: true
 
 steps:
-  download: false
+  download: true
   generate: true
   preprocess: true
   extract: true

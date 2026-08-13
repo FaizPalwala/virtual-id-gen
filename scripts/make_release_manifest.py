@@ -13,10 +13,10 @@ filenames remain in the published metadata — exits non-zero if any are found.
 Pruning (--prune-images --source-root): copies only the images referenced by
 the CSV from the source tree into the release image root, so orphan
 crops/portraits never ship.  Run once per CSV with the same release root and
-the union of referenced images is materialised.  Raw portraits arrive from
-the build ALREADY encoded as JPEG q95 (4:4:4) under
-``release_raw_jpeg/images/`` (early conversion on Aire — RELEASE_TODO
-Phase D2 P1-4); this script only prunes + copies them, it never re-encodes.
+the union of referenced images is materialised.  Raw candidates are
+converted to JPEG q95 (4:4:4) IN PLACE inside the build (verify-then-delete,
+RELEASE_TODO Phase D2 P1-4); this script only prunes + copies + renames
+(candidate_* → portrait_*), it never re-encodes.
 
 Example:
     python scripts/make_release_manifest.py \\
@@ -42,9 +42,10 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
 
     Pipeline-internal filenames are renamed to consumer-facing names:
     ``accepted_XXX.jpg`` → ``crop_XXX.jpg`` (bench) and
-    ``candidate_YYY.png`` → ``portrait_YYY.jpg`` (full — the build already
-    emitted the JPEG; the rename is a release-side label only).  The numeric
-    index (quality rank / trial number) is preserved.
+    ``candidate_YYY.jpg`` → ``portrait_YYY.jpg`` (full — the build already
+    converted the candidate to JPEG in place; the rename is a release-side
+    label only).  The numeric index (quality rank / trial number) is
+    preserved.
 
     Examples
     --------
@@ -68,7 +69,7 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
     identity_dir = parts[idx]
     filename = rename_for_release(parts[-1], release_type)
     # The release tree stores images under images/, regardless of whether the
-    # source lived under processed/images/ (bench) or release_raw_jpeg/images/ (raw).
+    # source lived under processed/images/ (bench) or identities/candidates/ (raw).
     return f"images/{identity_dir}/{filename}"
 
 
@@ -76,16 +77,17 @@ def normalise_path(path_str: str, release_type: str = "bench") -> str:
 # "accepted_*" (preprocess quality gate) and "candidate_*" (generate output)
 # are internal jargon; the release uses consumer-facing names.  The numeric
 # index is preserved — it encodes quality rank (bench) / trial number (raw).
-# Raw portraits are converted to JPEG q95 (4:4:4) EARLY, inside the build
-# (release_raw_jpeg/), so the release-side mapping is an identity: the
-# build emits portrait_YYY.jpg and this script copies it as-is.
+# Raw candidates are converted to JPEG q95 (4:4:4) IN PLACE inside the
+# build (candidate_YYY.png → candidate_YYY.jpg, verify-then-delete), so the
+# pipeline source is already JPEG; the release-side mapping is just the
+# rename candidate_* → portrait_*.
 _PIPELINE_TO_RELEASE = {
     "bench": (re.compile(r"^accepted_(\d{3})\.jpg$"), "crop_{}.jpg"),
-    "raw": (re.compile(r"^candidate_(\d{3})\.png$"), "portrait_{}.jpg"),
+    "raw": (re.compile(r"^candidate_(\d{3})\.(png|jpg)$"), "portrait_{}.jpg"),
 }
 _RELEASE_TO_PIPELINE = {
     "bench": (re.compile(r"^crop_(\d{3})\.jpg$"), "accepted_{}.jpg"),
-    "raw": (re.compile(r"^portrait_(\d{3})\.jpg$"), "portrait_{}.jpg"),
+    "raw": (re.compile(r"^portrait_(\d{3})\.jpg$"), "candidate_{}.jpg"),
 }
 
 
@@ -148,10 +150,10 @@ def _materialise_images(
 ) -> None:
     """Copy CSV-referenced images into the release image root.
 
-    Both Bench and Raw are pure copies: the build already emits raw
-    portraits as JPEG q95 (4:4:4) under ``release_raw_jpeg/images/``
-    (early conversion on Aire — RELEASE_TODO Phase D2 P1-4), so the
-    release-side has no re-encoding step.
+    Both Bench and Raw are pure copies: the build already converts raw
+    candidates to JPEG q95 (4:4:4) in place (identities/candidates/,
+    verify-then-delete — RELEASE_TODO Phase D2 P1-4), so the release-side
+    has no re-encoding step, just copy + rename.
     """
     jobs: list[tuple[Path, Path]] = []
     missing: list[str] = []
@@ -207,11 +209,11 @@ def make_manifest(
     #
     # The release tree flattens to images/identity_NNN/file, but the source
     # tree keeps its pipeline prefix: processed/images/identity_NNN/ (bench)
-    # or release_raw_jpeg/images/identity_NNN/ (raw — the build already
-    # emitted JPEG q95 4:4:4 there, so this is a pure copy).
+    # or identities/candidates/identity_NNN/ (raw — the build converted
+    # candidates to JPEG q95 in place, so this is a pure copy + rename).
     source_prefix = {
         "bench": "processed/images",
-        "raw": "release_raw_jpeg/images",
+        "raw": "identities/candidates",
     }[release_type]
 
     root = Path(image_root)

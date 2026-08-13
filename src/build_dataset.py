@@ -104,48 +104,53 @@ def _add_arcface_similarity(final: pd.DataFrame) -> pd.DataFrame:
     return final
 
 
-def _export_raw_jpeg(
+def _convert_one_inplace(args: tuple[Path, Path], quality: int = 95) -> None:
+    """Module-level worker (picklable under macOS spawn): PNG→JPEG in place."""
+    _png_to_jpeg(*args, quality)
+
+
+def _convert_candidates_inplace(
     df: pd.DataFrame,
-    out_root: Path,
     dataroot: Path,
     quality: int = 95,
     workers: int = 4,
+    expected_size: tuple[int, int] = (1024, 1024),
 ) -> None:
-    """Convert shipped raw portraits PNG→JPEG q95 (4:4:4) into a release tree.
+    """Convert raw candidates PNG→JPEG q95 (4:4:4) IN PLACE, verify-then-delete.
 
-    Runs inside the build (Aire-side) so the off-node transfer bundle is
-    ~22 GB of JPEG instead of ~100 GB of PNG.  Output layout mirrors the
-    release: ``images/identity_NNN/portrait_YYY.jpg``.  Atomic temp+replace
-    per file; failures are collected and raise (a partial raw release must
-    not silently ship).
+    Three phases (RELEASE_TODO Phase D2 P1-4, user-approved design):
+      1. convert every shipped candidate ``candidate_YYY.png`` →
+         ``candidate_YYY.jpg`` in the SAME directory (atomic temp+replace),
+         collecting failures WITHOUT deleting anything
+      2. verify every JPEG decodes at the expected size, RGB (decode is the
+         whole point of the "verify before delete" contract)
+      3. ONLY then delete the source PNGs — if any conversion or
+         verification failed, nothing is deleted and the build raises
+
+    Runs inside the build (Aire-side), AFTER extract/preprocess have read
+    the PNGs, so the off-node transfer bundle is ~22 GB of JPEG instead of
+    ~100 GB of PNG.  The CSV image_path columns are rewritten .png→.jpg by
+    the caller so shipped metadata matches the surviving files.
     """
     from concurrent.futures import ProcessPoolExecutor
 
-    def _convert_one(args: tuple[Path, Path]) -> None:
-        src, dst = args
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        _png_to_jpeg(src, dst, quality)
-
     jobs: list[tuple[Path, Path]] = []
     for _, row in df.iterrows():
-        # image_path is dataroot-relative (identities/candidates/...).
-        rel = row["image_path"]
-        trial = int(rel.rsplit("_", 1)[1].split(".")[0])
-        ident = rel.split("/")[-2]  # identity_NNN
+        rel = row["image_path"]  # dataroot-relative: identities/candidates/...
         src = dataroot / rel
-        dst = out_root / "images" / ident / f"portrait_{trial:03d}.jpg"
+        dst = src.with_suffix(".jpg")
         jobs.append((src, dst))
 
+    # ---- Phase 1: convert (never delete on failure) ----
     missing = [str(s) for s, _ in jobs if not s.is_file()]
     if missing:
         raise RuntimeError(
-            f"{len(missing)} raw candidates missing for JPEG export: "
+            f"{len(missing)} raw candidates missing for JPEG conversion: "
             f"{missing[:5]}"
         )
-
     done = 0
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_convert_one, j) for j in jobs]
+        futures = [pool.submit(_convert_one_inplace, j, quality) for j in jobs]
         failures: list[str] = []
         for fut in futures:
             try:
@@ -154,13 +159,38 @@ def _export_raw_jpeg(
                 failures.append(str(exc))
             done += 1
             if done % 5000 == 0:
-                print(f"  [raw-jpeg] {done}/{len(jobs)}")
+                print(f"  [raw-jpeg] converted {done}/{len(jobs)}")
     if failures:
         raise RuntimeError(
-            f"{len(failures)}/{len(jobs)} raw JPEG exports failed. "
-            f"First 5: {failures[:5]}"
+            f"{len(failures)}/{len(jobs)} raw JPEG conversions failed — "
+            f"PNGs kept, nothing deleted.  First 5: {failures[:5]}"
         )
-    print(f"[OK] Raw JPEG export: {len(jobs)} portraits → {out_root / 'images'}")
+
+    # ---- Phase 2: verify every JPEG decodes at the expected size, RGB ----
+    from PIL import Image
+
+    bad: list[str] = []
+    for i, (src, dst) in enumerate(jobs):
+        try:
+            with Image.open(dst) as im:
+                im.load()
+                if im.mode != "RGB" or im.size != expected_size:
+                    bad.append(f"{dst} → {im.mode} {im.size}")
+        except Exception as exc:  # noqa: BLE001
+            bad.append(f"{dst} → {exc}")
+        if (i + 1) % 5000 == 0:
+            print(f"  [raw-jpeg] verified {i + 1}/{len(jobs)}")
+    if bad:
+        raise RuntimeError(
+            f"{len(bad)}/{len(jobs)} JPEGs failed verification — PNGs kept. "
+            f"First 5: {bad[:5]}"
+        )
+
+    # ---- Phase 3: only now delete the sources ----
+    for src, _ in jobs:
+        src.unlink(missing_ok=True)
+    print(f"[OK] In-place raw JPEG: {len(jobs)} portraits converted, "
+          f"PNGs deleted, tree is now ~22 GB")
 
 
 def _png_to_jpeg(src: Path, dst: Path, quality: int = 95) -> None:
@@ -876,6 +906,7 @@ def build_raw_dataset(
     outputdir: str,
     randomstate: int = 42,
     raw_jpeg_dir: str | None = None,
+    jpeg_expected_size: tuple[int, int] = (1024, 1024),
 ) -> str:
     """Build the full-resolution 1024x1024 raw dataset.
 
@@ -887,6 +918,11 @@ def build_raw_dataset(
 
     Columns: identity_id, age, gender, arcface_similarity, pose,
     expression, lighting, setting, camera.
+
+    ``raw_jpeg_dir`` is an ENABLE FLAG (value ignored): when set, every
+    shipped candidate is converted PNG→JPEG q95 (4:4:4) IN PLACE with
+    verify-then-delete (see ``_convert_candidates_inplace``) and the CSV
+    image_path is rewritten .png→.jpg.  Runs after extract/preprocess.
     """
     manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
@@ -958,18 +994,25 @@ def build_raw_dataset(
         lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
+    # In-place raw JPEG conversion (RELEASE_TODO Phase D2 P1-4, user-approved
+    # design): when raw_jpeg_dir is set (any value — it is an enable flag),
+    # convert every shipped candidate PNG→JPEG q95 (4:4:4) in place with
+    # verify-then-delete, so the off-node transfer bundle is ~22 GB instead
+    # of ~100 GB.  Must run BEFORE the CSV write: the shipped image_path is
+    # rewritten .png→.jpg so metadata matches the surviving files.  Runs
+    # after extract/preprocess have already read the PNGs.
+    if raw_jpeg_dir:
+        _convert_candidates_inplace(
+            output_df, dataroot, expected_size=jpeg_expected_size
+        )
+        output_df["image_path"] = output_df["image_path"].str.replace(
+            r"\.png$", ".jpg", regex=True
+        )
+
     csv_path = output / "dataset_raw.csv"
     parquet_path = output / "dataset_raw.parquet"
     output_df.to_csv(csv_path, index=False)
     output_df.to_parquet(parquet_path, index=False)
-
-    # Early JPEG export (RELEASE_TODO Phase D2 P1-4): the raw release ships
-    # as JPEG q95 (4:4:4) — convert HERE, on Aire, so the off-node transfer
-    # bundle is ~22 GB instead of ~100 GB of PNG.  Same encoding as the old
-    # Mac-side make_release_manifest step, moved into the build where the
-    # format decision belongs.  Deterministic, parallel, atomic per file.
-    if raw_jpeg_dir:
-        _export_raw_jpeg(output_df, Path(raw_jpeg_dir), dataroot)
 
     max_balanced = int(output_df.groupby("identity_id").size().min())
     max_per_id = int(output_df.groupby("identity_id").size().max())
