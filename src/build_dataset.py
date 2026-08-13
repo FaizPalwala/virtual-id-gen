@@ -905,7 +905,6 @@ def build_raw_dataset(
     embeddingsdir: str,
     outputdir: str,
     randomstate: int = 42,
-    raw_jpeg_dir: str | None = None,
     jpeg_expected_size: tuple[int, int] = (1024, 1024),
 ) -> str:
     """Build the full-resolution 1024x1024 raw dataset.
@@ -919,10 +918,11 @@ def build_raw_dataset(
     Columns: identity_id, age, gender, arcface_similarity, pose,
     expression, lighting, setting, camera.
 
-    ``raw_jpeg_dir`` is an ENABLE FLAG (value ignored): when set, every
-    shipped candidate is converted PNG→JPEG q95 (4:4:4) IN PLACE with
-    verify-then-delete (see ``_convert_candidates_inplace``) and the CSV
-    image_path is rewritten .png→.jpg.  Runs after extract/preprocess.
+    JPEG is the shipped format, decided HERE: every shipped candidate is
+    converted PNG→JPEG q95 (4:4:4) IN PLACE with verify-then-delete (see
+    ``_convert_candidates_inplace``) and the CSV image_path is rewritten
+    .png→.jpg.  Unconditional — no toggle, no Mac-side conversion.  Runs
+    after extract/preprocess (they read the PNGs first).
     """
     manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
@@ -994,20 +994,16 @@ def build_raw_dataset(
         lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
-    # In-place raw JPEG conversion (RELEASE_TODO Phase D2 P1-4, user-approved
-    # design): when raw_jpeg_dir is set (any value — it is an enable flag),
-    # convert every shipped candidate PNG→JPEG q95 (4:4:4) in place with
+    # In-place raw JPEG conversion — unconditional (RELEASE_TODO Phase D2
+    # P1-4): the raw release ships as JPEG q95 (4:4:4), decided here in the
+    # build.  Every shipped candidate is converted PNG→JPEG with
     # verify-then-delete, so the off-node transfer bundle is ~22 GB instead
-    # of ~100 GB.  Must run BEFORE the CSV write: the shipped image_path is
-    # rewritten .png→.jpg so metadata matches the surviving files.  Runs
-    # after extract/preprocess have already read the PNGs.
-    if raw_jpeg_dir:
-        _convert_candidates_inplace(
-            output_df, dataroot, expected_size=jpeg_expected_size
-        )
-        output_df["image_path"] = output_df["image_path"].str.replace(
-            r"\.png$", ".jpg", regex=True
-        )
+    # of ~100 GB and the shipped CSV image_path is .jpg.  Must run BEFORE
+    # the CSV write.  Runs after extract/preprocess have read the PNGs.
+    _convert_candidates_inplace(output_df, dataroot, expected_size=jpeg_expected_size)
+    output_df["image_path"] = output_df["image_path"].str.replace(
+        r"\.png$", ".jpg", regex=True
+    )
 
     csv_path = output / "dataset_raw.csv"
     parquet_path = output / "dataset_raw.parquet"

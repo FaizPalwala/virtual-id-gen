@@ -122,8 +122,9 @@ def main(cfg: DictConfig) -> None:
 
         # Build full-resolution 1024×1024 candidate dataset (max-size,
         # no splits — plain embedding mapping for general-purpose release).
-        # Early JPEG export (raw_jpeg_dir) happens here on Aire so the
-        # off-node transfer bundle is ~22 GB not ~100 GB of PNG.
+        # In-place PNG→JPEG q95 conversion is UNCONDITIONAL inside the raw
+        # build (verify-then-delete), so the off-node transfer bundle is
+        # ~22 GB not ~100 GB of PNG.
         from build_dataset import build_raw_dataset
 
         LOGGER.info(
@@ -133,7 +134,6 @@ def main(cfg: DictConfig) -> None:
                 str(embeddings),
                 str(dataset),
                 cfg.dataset.seed,
-                raw_jpeg_dir=cfg.dataset.get("raw_jpeg_dir"),
             ),
         )
 

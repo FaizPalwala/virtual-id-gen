@@ -72,6 +72,20 @@ def dataset_inputs(tmp_path):
     pd.DataFrame(crop_rows).to_csv(processed / "identitymanifest.csv", index=False)
     pd.DataFrame(cand_rows).to_csv(identities / "raw_candidate_manifest.csv", index=False)
 
+    # Materialise real candidate PNGs (64x64): the raw build's in-place
+    # JPEG conversion is UNCONDITIONAL and verify-then-delete — a fixture
+    # without image files would mask contract drift (the D1 lesson).
+    from PIL import Image
+
+    for cid in range(n_ids):
+        cdir = identities / "candidates" / f"identity_{cid:03d}"
+        cdir.mkdir(parents=True, exist_ok=True)
+        for trial in range(candidates_per_id):
+            p = cdir / f"candidate_{trial:03d}.png"
+            if not p.is_file():
+                Image.new("RGB", (64, 64),
+                          (120 + cid % 50, 100 + trial % 40, 80)).save(p)
+
     # Embeddings: one-hot-ish per identity so the mean embedding is stable;
     # trial derived from candidate_YYY in the path (extract contract).
     n = len(cand_rows)

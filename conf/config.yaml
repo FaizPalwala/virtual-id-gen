@@ -21,13 +21,6 @@ dataset:
   seed: 42
   # skip Kaggle download when dataset already exists locally
   skip_download: false
-  # In-place raw JPEG conversion (RELEASE_TODO Phase D2 P1-4): when set
-  # (any non-null value — enable flag), the raw build converts every
-  # shipped candidate PNG→JPEG q95 (4:4:4) IN PLACE with verify-then-delete
-  # (build_dataset._convert_candidates_inplace), so the off-node transfer
-  # bundle is ~22 GB not ~100 GB of PNG and the CSV image_path ships .jpg.
-  # Null = off (PNG source tree kept, Mac-side release conversion).
-  raw_jpeg_dir: null
 pipeline:
   ctxid: 0
   imgsize: 224

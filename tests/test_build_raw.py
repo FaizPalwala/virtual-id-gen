@@ -15,8 +15,12 @@ def test_raw_is_max_size_without_splits(dataset_inputs):
         dataset_inputs["embeddings"],
         dataset_inputs["dataset"] + "_raw",
         randomstate=42,
+        jpeg_expected_size=(64, 64),  # fixture candidates are 64x64
     )
     df = pd.read_csv(result_path)
+
+    # In-place JPEG conversion is UNCONDITIONAL: shipped paths are .jpg
+    assert df["image_path"].str.endswith(".jpg").all()
 
     # All candidates shipped, no quality trim.
     assert len(df) == dataset_inputs["n_ids"] * dataset_inputs["candidates_per_id"]
