@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Validate the prompt variation plan BEFORE generation spends GPU hours.
 
-Pre-flight gate for hpc_generate.sh (RELEASE_TODO Phase D2 P1-3): the
-20×5 prompt grid must yield 100 unique prompts with real per-dimension
-diversity, deterministically.  A silent collapse here (e.g. duplicate
-compositions, a broken lighting cross-product) would produce an
-identity-consistent-but-monotonous dataset that only surfaces at release
-QA — after ~8 GPU-hours per shard × 15 shards.
+Pre-flight gate for hpc_generate.sh: the 20×5 prompt grid must yield 
+100 unique prompts with real per-dimension diversity, deterministically. 
+A silent collapse here (e.g. duplicate compositions, a broken lighting 
+cross-product) would produce an identity-consistent-but-monotonous dataset 
+that only surfaces at release QA — after ~8 GPU-hours per shard × 15 shards.
 
 Checks:
   1. exactly 100 variations

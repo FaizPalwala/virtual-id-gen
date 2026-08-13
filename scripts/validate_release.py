@@ -200,13 +200,6 @@ def validate(
             )
 
     # ---- 6b. Prompt-metadata variance (raw only — per-candidate design) ----
-    # The 20×5 prompt grid gives every candidate a unique rendering
-    # instruction (RELEASE_TODO Phase D1): each identity's portraits must
-    # span multiple poses/expressions/lightings in the SHIPPED CSV.  A
-    # per-identity collapse (the D1 bug) reports one value for the whole
-    # identity — this gate makes that a release-blocking failure.
-    # setting/camera are excluded from the per-identity check (camera has
-    # only 3 lenses in the grid; setting repeats across candidates).
     variation_cols = [c for c in ("pose", "expression", "lighting")
                       if c in df.columns]
     if variation_cols:
