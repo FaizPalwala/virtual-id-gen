@@ -180,9 +180,6 @@ Detailed HPC setup: [`HPC CookBook.md`](HPC CookBook.md).
 # Full pipeline (all 6 phases, chained with Slurm dependencies):
 sbatch scripts/hpc_full_pipeline.sh
 
-# Smoke test first (4 identities × 3 candidates, ~15 min):
-sbatch scripts/hpc_smoke_test.sh
-
 # Individual phases:
 sbatch scripts/hpc_generate.sh       # 12-GPU array
 sbatch scripts/hpc_merge.sh          # after generate completes
