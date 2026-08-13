@@ -17,10 +17,7 @@
 #         $DATA_DIR/embeddings/
 # Output: $DATA_DIR/dataset/dataset.csv
 #
-# ALSO converts raw candidates to JPEG q95 (4:4:4) IN PLACE — UNCONDITIONAL
-# inside the raw build (verify-then-delete, RELEASE_TODO Phase D2 P1-4) so
-# the off-node transfer bundle is ~22 GB not ~100 GB of PNG.  8 CPUs for
-# the parallel PNG→JPEG workers (memory-bound, 4 workers optimal).
+# ALSO converts raw candidates to JPEG q95 (4:4:4) IN PLACE 
 # ------------------------------------------------------------------
 
 # ==========================================

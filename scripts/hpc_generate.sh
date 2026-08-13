@@ -12,14 +12,6 @@
 #SBATCH --output=logs/%x_shard%a_%j.out
 #SBATCH --error=logs/%x_shard%a_%j.err
 
-# NOTE (2026-08-06): --exclusive removed deliberately.  It reserved a whole
-# 4-GPU node per shard to use 1 GPU (15 of 20 GPUs wasted under the 5-job
-# concurrency cap → scheduler deprioritized the array).  GPU isolation is
-# guaranteed by --gres=gpu:1 alone; --mem=64G pins the CPU-RAM footprint
-# (model loading peak ~30 GB, 2× headroom).  Per-shard wall time is ~8 h
-# (100 cands/id); 12 h limit gives 50% headroom and stays backfill-friendly.
-# If OOM resurfaces: bump --mem (CPU) or re-add --exclusive (node-level).
-
 # CUDA memory: enable expandable segments to reduce fragmentation from
 # loading SDXL + ControlNet + Juggernaut + InstantID in sequence.
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -32,8 +24,8 @@ echo "[INFO] Shard ${SLURM_ARRAY_TASK_ID}: GPU $(nvidia-smi --query-gpu=index,me
 # Each array task generates 50 identities with a unique random seed.
 # 750 identities across 15 shards (5 concurrent HPC job slots × 3 waves).
 # Seed partition is computed IN-GENERATE: every shard independently
-# shuffles the loose 750-seed pool (srand 7, same as partition_seeds.sh)
-# and takes its round-robin slice — no Mac-side step, no cross-shard
+# shuffles the loose 750-seed pool (srand 7) and takes its round-robin
+# slice — no Mac-side step, no cross-shard
 # seed reuse (v1.0.0 bug: 397 unique seeds from 600 identities).
 #
 # Shard  0 (seed=42): identities   0– 49
@@ -123,7 +115,7 @@ bash "$SHARD_TMPDIR/repo/scripts/gpu_preflight.sh"
 # Validates the 20x5 prompt grid: 100 unique prompts, per-dimension
 # diversity floors (lighting=5, pose>=10, ...), determinism.  A silent
 # collapse here costs 8 GPU-hours x 15 shards before release QA catches it
-# (RELEASE_TODO Phase D2 P1-3).  Every shard re-verifies (cheap, ~1 s).
+# (and the cost is in terms of time, not just compute).  Every shard re-verifies (cheap, ~1 s).
 echo "[$(date)] Shard ${SLURM_ARRAY_TASK_ID}: Validating prompt plan..."
 cd "$SHARD_TMPDIR/repo/src"
 PYTHONPATH="$SHARD_TMPDIR/repo/src" python "$SHARD_TMPDIR/repo/scripts/validate_prompt_plan.py" \
@@ -149,13 +141,7 @@ cd "$SHARD_TMPDIR/repo/src"
 SHARD_DATA="$SHARD_TMPDIR/data_shard_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$SHARD_DATA/seeds"
 
-# Deterministic in-generate seed partition — NO Mac-side step needed.
-# Every array task independently computes the SAME shuffle (srand 7) of
-# the full loose seed pool and takes the round-robin slice for its shard
-# id.  Identical scheme to partition_seeds.sh, so seed→shard assignment
-# is reproducible and consistent whether or not the Mac-side script ran.
-# Guarantees no cross-shard seed reuse (the v1.0.0 bug: all shards shared
-# the full pool, producing 397 distinct seeds for 600 identities).
+# Deterministic in-generate seed partition 
 NSHARDS=15
 SEED_PICK=$(mktemp)
 ls "$SHARD_TMPDIR/data/seeds"/seed_*.jpg 2>/dev/null | sort | perl -e '
