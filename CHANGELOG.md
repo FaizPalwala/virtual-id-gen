@@ -21,7 +21,8 @@ reserved.
     - `dataset.csv` — balanced, **67,500** images (90/id; 72 train + 18 holdout)
     - `dataset_imbalanced.csv` — ratio-based **5:1 (82:41:16)** train gradient,
       **36,064** images (kept 100/59/34 per bin; 18 holdout/id; 11 high-bin
-      rows absent — 123 preprocess rejects capped 10 pools at 98–99)
+      rows absent — 123 candidates failed the preprocess quality gate
+      (blur/unreadable), capping 10 pools at 98–99)
   - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **75,000** images (100/id,
     max-size, no splits; JPEG q95 4:4:4; no exclusions in this release)
 - Holdout uniform at 18/id across all bins:

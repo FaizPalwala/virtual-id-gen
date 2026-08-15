@@ -39,8 +39,8 @@ must be acknowledged.**
 | **Imbalance gradient** | 5:1 — high 75 ids / medium 225 / low 450; train ratios {1.0, 0.50, 0.20} on an 82-train pool |
 
 The imbalanced artifact ships 36,064 rows (11 fewer than 75 × 100): 123
-candidates failed the preprocess quality gate, capping 10 high-bin identity
-pools at 98–99 crops.
+candidates failed the preprocess quality gate (blur/unreadable), capping
+10 high-bin identity pools at 98–99 crops.
 
 ## Labels
 
