@@ -95,15 +95,21 @@
   "package_versions": {
     "python": "3.10",
     "torch": "2.6.0+cu124",
+    "torchvision": "0.21.0+cu124",
     "diffusers": "0.39.0",
     "onnxruntime_gpu": "1.19.2",
-    "transformers": "TBD (pip freeze on Aire)",
-    "insightface": "TBD (pip freeze on Aire)",
-    "facenet_pytorch": "TBD (pip freeze on Aire)",
-    "opencv": "TBD (pip freeze on Aire)",
-    "pillow": "TBD (pip freeze on Aire)",
-    "numpy": "TBD (pip freeze on Aire)",
-    "pandas": "TBD (pip freeze on Aire)"
+    "transformers": "5.14.1",
+    "insightface": "1.0.1",
+    "facenet_pytorch": "2.5.3",
+    "opencv": "5.0.0.93",
+    "pillow": "12.2.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "accelerate": "1.14.0",
+    "xformers": "0.0.29.post3",
+    "hydra_core": "1.3.4",
+    "omegaconf": "2.3.1",
+    "kaggle": "1.7.4.5"
   },
   "model_revisions": {
     "juggernaut_xl_v9": {
@@ -132,8 +138,8 @@
     "antelopev2_mirror": {
       "repo": "DIAMONIK7777/antelopev2",
       "purpose": "Face analysis for InstantID generation only (scrfd_10g_bnkps.onnx detector); NOT used by embedding extraction / preprocessing (those use buffalo_l)",
-      "revision": "TODO (pin on Aire after first download)",
-      "download_date": "TODO",
+      "revision": "ba0c3e10f4548361eb9a63265d87ce1140ab5a05",
+      "download_date": "2026-08-15 (regeneration run; mirror snapshot lastModified 2024-01-22, unchanged; scrfd_10g_bnkps.onnx verified present)",
       "license": "UNVERIFIED third-party mirror of InsightFace models — do not redistribute; verify provenance before any public generation claims"
     }
   },
