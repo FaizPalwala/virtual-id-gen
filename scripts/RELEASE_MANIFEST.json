@@ -133,7 +133,7 @@
     "insightface_buffalo_l": {
       "pack": "buffalo_l",
       "models": ["det_10g.onnx", "w600k_r50.onnx", "genderage.onnx", "1k3d68.onnx", "2d106det.onnx"],
-      "download_date": "TODO"
+      "download_date": "2026-07-18 (first FaceAnalysis use on Aire; cache mtime)"
     },
     "antelopev2_mirror": {
       "repo": "DIAMONIK7777/antelopev2",
@@ -154,7 +154,7 @@
     "part": 1,
     "image_count": "~90000",
     "seed_selection": "CLIP features + KMeans diversity selection",
-    "download_date": "TODO"
+    "download_date": "2026-08-13 (Kaggle part-1 download on Aire; data/seeds mtime)"
   },
   "checksums": "checksums.sha256"
 }
