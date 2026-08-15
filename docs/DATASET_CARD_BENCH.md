@@ -38,6 +38,10 @@ must be acknowledged.**
 | **Holdout** | 18 per identity (`max(min_holdout, round(imagesperidentity × holdout_frac))`) |
 | **Imbalance gradient** | 5:1 — high 75 ids / medium 225 / low 450; train ratios {1.0, 0.50, 0.20} on an 82-train pool |
 
+The imbalanced artifact ships 36,064 rows (11 fewer than 75 × 100): 123
+candidates failed the preprocess quality gate, capping 10 high-bin identity
+pools at 98–99 crops.
+
 ## Labels
 
 | Column | Type | Values |
@@ -95,7 +99,9 @@ attacks, forgetting-generalisation, retention.
 Synthetic identities were generated with InstantID + Juggernaut-XL-v9 +
 ControlNet from CC0 synthetic SFHQ seed images (CLIP+KMeans-diverse seed
 selection); faces were detected, aligned, and cropped to 224×224, then
-quality-gated and identity-gated before split assignment.  Exact model
+quality-gated (sharpness + decodability) before split assignment.  The
+`arcface_similarity` column is a confound control — the similarity floor was
+not applied as a filter in this release.  Exact model
 revisions, generation configuration, and licence URLs are recorded in
 `RELEASE_MANIFEST.json` and `THIRD_PARTY_NOTICES.md`.  No model weights are
 distributed.
