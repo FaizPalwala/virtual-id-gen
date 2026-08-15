@@ -1,13 +1,27 @@
 """
 build_dataset.py
 
-Constructs the final Phase 2 dataset mapping by merging generated identity 
-manifests with extracted embedding attributes. Applies the train/test/forget splits.
-Build the backward-compatible final ``dataset.csv`` file.
+Utilities to construct release dataset artifacts from generated identity
+manifests and extracted embedding attributes. Exposes three builders:
 
-Example:
-    python main.py --config-name step5_build \\
-        dataset.dataroot=../data
+- ``build_dataset``: creates the balanced 224x224 crop release
+    (writes ``dataset.csv``, ``dataset.parquet``, ``datasetsummary.json``).
+- ``build_imbalanced_dataset``: creates the popularity-imbalanced variant
+    (writes ``dataset_imbalanced.*`` and summary).
+- ``build_raw_dataset``: creates the full-resolution 1024x1024 candidate
+    release (writes ``dataset_raw.*`` and summary) and performs in-place
+    PNG→JPEG conversion for shipped candidates.
+
+Inputs: identity manifests (``identitymanifest.csv`` or
+``identities/raw_candidate_manifest.csv``) and the ``embeddingsdir``
+produced by ``extract_embeddings.py`` (Numpy arrays).
+
+Example (project CLI):
+        python main.py --config-name step5_build dataset.dataroot=../data
+
+Or call the functions directly from Python:
+        from src.build_dataset import build_dataset
+        build_dataset(identitydir, embeddingsdir, outputdir)
 """
 from __future__ import annotations
 
@@ -110,7 +124,7 @@ def _convert_candidates_inplace(
 ) -> None:
     """Convert raw candidates PNG→JPEG q95 (4:4:4) IN PLACE, verify-then-delete.
 
-    Three phases (RELEASE_TODO Phase D2 P1-4, user-approved design):
+    Three phases:
       1. convert every shipped candidate ``candidate_YYY.png`` →
          ``candidate_YYY.jpg`` in the SAME directory (atomic temp+replace),
          collecting failures WITHOUT deleting anything
@@ -119,7 +133,7 @@ def _convert_candidates_inplace(
       3. ONLY then delete the source PNGs — if any conversion or
          verification failed, nothing is deleted and the build raises
 
-    Runs inside the build (Aire-side), AFTER extract/preprocess have read
+    Runs inside the build (HPC-side), AFTER extract/preprocess have read
     the PNGs, so the off-node transfer bundle is ~22 GB of JPEG instead of
     ~100 GB of PNG.  The CSV image_path columns are rewritten .png→.jpg by
     the caller so shipped metadata matches the surviving files.
@@ -805,11 +819,6 @@ def build_raw_dataset(
     Columns: identity_id, age, gender, arcface_similarity, pose,
     expression, lighting, setting, camera.
 
-    JPEG is the shipped format, decided HERE: every shipped candidate is
-    converted PNG→JPEG q95 (4:4:4) IN PLACE with verify-then-delete (see
-    ``_convert_candidates_inplace``) and the CSV image_path is rewritten
-    .png→.jpg.  Unconditional — no toggle, no Mac-side conversion.  Runs
-    after extract/preprocess (they read the PNGs first).
     """
     manifest = pd.read_csv(Path(identitydir) / "identities" / "raw_candidate_manifest.csv")
     id_col = "identity_id" if "identity_id" in manifest.columns else "clusterid"
@@ -845,7 +854,7 @@ def build_raw_dataset(
     final = _add_arcface_similarity(final)
     identities = sorted(final["identity_id"].unique())
 
-    # Airtight guard (RELEASE_TODO Phase D1): the 20×5 prompt grid gives
+    # Airtight guard: the 20×5 prompt grid gives
     # every candidate a unique rendering instruction, so every identity's
     # shipped portraits MUST span >1 pose/expression/lighting (the
     # variation dimensions).  setting/camera can legitimately repeat (the
@@ -880,12 +889,7 @@ def build_raw_dataset(
         lambda p: _to_dataroot_relative(p, Path(identitydir) / "identities", dataroot)
     )
 
-    # In-place raw JPEG conversion — unconditional (RELEASE_TODO Phase D2
-    # P1-4): the raw release ships as JPEG q95 (4:4:4), decided here in the
-    # build.  Every shipped candidate is converted PNG→JPEG with
-    # verify-then-delete, so the off-node transfer bundle is ~22 GB instead
-    # of ~100 GB and the shipped CSV image_path is .jpg.  Must run BEFORE
-    # the CSV write.  Runs after extract/preprocess have read the PNGs.
+    # In-place raw JPEG conversion 
     _convert_candidates_inplace(output_df, dataroot, expected_size=jpeg_expected_size)
     output_df["image_path"] = output_df["image_path"].str.replace(
         r"\.png$", ".jpg", regex=True
