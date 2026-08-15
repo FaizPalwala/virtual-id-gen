@@ -9,7 +9,7 @@ upstream sources listed below under each project's own licence terms.
 
 | Component | Source | Licence | Notes |
 |---|---|---|---|
-| SFHQ | [SelfishGene/SFHQ-dataset](https://github.com/SelfishGene/SFHQ-dataset) | CC0 / Public Domain (Kaggle listing) | Synthetic portraits from StyleGAN2 + diffusion models.  Part 1 (~90k images) used; CLIP + KMeans diversity selection picks the 600 seeds. |
+| SFHQ | [SelfishGene/SFHQ-dataset](https://github.com/SelfishGene/SFHQ-dataset) | CC0 / Public Domain (Kaggle listing) | Synthetic portraits from StyleGAN2 + diffusion models.  Part 1 (~90k images) used; CLIP + KMeans diversity selection picks the 750 seeds. |
 
 ## Generative models
 

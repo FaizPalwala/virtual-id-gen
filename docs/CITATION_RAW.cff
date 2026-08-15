@@ -7,7 +7,7 @@ authors:
     given-names: Faiz
     orcid: 0009-0000-1426-9471
 version: 1.0.0
-date-released: 2026-08-10
+date-released: 2026-08-15
 doi: 10.5281/zenodo.21879130
 identifiers:
   - type: doi
@@ -27,7 +27,7 @@ abstract: >
   SFHQ-VirtualID-Bench (224x224 aligned crops — 67,500 balanced + 36,064
   imbalanced with a ratio-based 82:41:16 train gradient, both schedules
   uniform and seeded-Poisson) and SFHQ-VirtualID-Raw (1024x1024 portraits,
-  74,999 images, JPEG q95 4:4:4, max-size reference).
+  75,000 images, JPEG q95 4:4:4, max-size reference).
 keywords:
   - synthetic face dataset
   - machine unlearning

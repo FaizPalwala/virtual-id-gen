@@ -9,19 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 > Initial release of the full pipeline + dataset.  `main` becomes the
 > release branch with this merge; everything below is what ships in v1.0.0.
 
-### Data freeze status (v1.0.0 — SHIPPED)
+### Data freeze status (v1.0.0 — SHIPPED, REGENERATED 2026-08-15)
 
-750 identities × 100 candidates, 5:1 train gradient.  Frozen + verified:
-release QA 3/3 PASS, both HF repos live (private), Zenodo DOIs reserved.
+750 identities × 100 candidates, 5:1 train gradient.  Regenerated with the
+per-candidate prompt-metadata fix (D1) + airtight validation gates; release
+QA 3/3 PASS on the fresh build, both HF repos live (private), Zenodo DOIs
+reserved.
 
 - **Shipped artifacts**:
   - `SFHQ-VirtualID-Bench` — 224×224 aligned crops (JPEG)
     - `dataset.csv` — balanced, **67,500** images (90/id; 72 train + 18 holdout)
     - `dataset_imbalanced.csv` — ratio-based **5:1 (82:41:16)** train gradient,
       **36,064** images (kept 100/59/34 per bin; 18 holdout/id; 11 high-bin
-      rows absent — 122 preprocess rejects capped 10 pools at 98–99)
-  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **74,999** images (100/id,
-    max-size, no splits; JPEG q95 4:4:4; 1 corrupt candidate excluded)
+      rows absent — 123 preprocess rejects capped 10 pools at 98–99)
+  - `SFHQ-VirtualID-Raw` — 1024×1024 portraits, **75,000** images (100/id,
+    max-size, no splits; JPEG q95 4:4:4; no exclusions in this release)
 - Holdout uniform at 18/id across all bins:
   `max(min_holdout, round(imagesperidentity × holdout_frac))` = 18/id.
 - Train gradient = 5:1 (1.0:0.50:0.20), calibrated to the VGG-Face2 range
@@ -119,7 +121,7 @@ release QA 3/3 PASS, both HF repos live (private), Zenodo DOIs reserved.
   `.DS_Store` from a single refactor commit before this PR.
 - No weights, no source-to-output linkage, no embeddings, no seeds shipped.
 
-### Known limitations (see `DATASET_CARD.md`)
+### Known limitations (see the per-release `DATASET_CARD.md`)
 
 - Synthetic, not anonymous — residual likeness / memorisation possible.
 - Age labels are model-estimated proxy labels.

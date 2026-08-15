@@ -24,7 +24,7 @@ The project publishes **two complementary datasets** (see
 | Release | Resolution | Contents | Purpose |
 |---|---|---|---|
 | **SFHQ-VirtualID-Bench** | 224×224 aligned crops | Balanced (67,500) + imbalanced (36,064) | Machine-unlearning benchmark (primary) |
-| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (74,999, 100/id) | General-purpose identity-conditioned faces |
+| **SFHQ-VirtualID-Raw** | 1024×1024 portraits | Max-size (75,000, 100/id) | General-purpose identity-conditioned faces |
 
 ## Dataset at a glance
 
@@ -35,7 +35,7 @@ The project publishes **two complementary datasets** (see
 | **Output resolution** | 224×224 (Bench, aligned crops) / 1024×1024 (Raw, portraits) |
 | **Identities** | 750 |
 | **Images per identity** | 90 (Bench balanced) / 100 (Raw) / variable (Bench imbalanced, ratio-based gradient) |
-| **Total images** | 67,500 (Bench balanced) / 36,064 (Bench imbalanced) / 74,999 (Raw) |
+| **Total images** | 67,500 (Bench balanced) / 36,064 (Bench imbalanced) / 75,000 (Raw) |
 | **Splits** | Retain 675, Forget 75 identities; per-image `image_subset` (train + holdout) |
 | **Forget protocol** | 15 steps, 75 forget identities — uniform 5/step (baseline) or seeded-Poisson batches (variant) |
 | **Labels (standard)** | `identity_id`, `age_group`, `split`, `forget_step`, `forget_step_poisson`, `image_subset`, `arcface_similarity`, `laplacian_variance`, `detection_confidence` (prompt metadata stripped from Bench) |
@@ -132,8 +132,8 @@ four dataset pairs from a single pipeline run.
 | `pipeline.instantid.base_model` | `RunDiffusion/Juggernaut-XL-v9` | Base SDXL model |
 | `pipeline.instantid.controlnet_conditioning_scale` | 0.80 | ControlNet spatial control |
 | `pipeline.imgsize` | 224 | Final crop resolution |
-| `pipeline.min_similarity_raw` | 0.40 | ArcFace gate (generate phase) |
-| `pipeline.min_similarity_final` | 0.45 | ArcFace gate (preprocess phase) |
+| `pipeline.min_similarity_raw` | 0.40 | ArcFace similarity floor — **config default only; NOT enforced in v1.0.0** (`arcface_similarity` ships as a confound column) |
+| `pipeline.min_similarity_final` | 0.45 | ArcFace similarity floor — **config default only; NOT enforced in v1.0.0** (`arcface_similarity` ships as a confound column) |
 | `pipeline.blurthreshold` | 80.0 | Laplacian variance sharpness floor |
 
 **Size guards:** `nidentities ≥ 100` enforced for download and build steps
@@ -305,7 +305,7 @@ imbalanced variant is exclusive to the Bench (224) release.
 |---|---|---|---|---|---|---|
 | **Bench** | `dataset.csv/.parquet` | 224×224 crops | 750 | 90 (72 train + 18 holdout) | 67,500 | Dissertation unlearning benchmark |
 | **Bench** | `dataset_imbalanced.csv/.parquet` | 224×224 crops | 750 | ratio-based (82:41:16 train; +18 holdout/id) | 36,064 | Long-tail stress test |
-| **Raw** | `dataset_raw.csv/.parquet` | 1024×1024 portraits | 750 | 100 | 74,999 | General-purpose release |
+| **Raw** | `dataset_raw.csv/.parquet` | 1024×1024 portraits | 750 | 100 | 75,000 | General-purpose release |
 
 All three share identical `identity_id` and `split` labels (where present).
 Demographics (age, gender) are derived from detection on 1024×1024 portraits
@@ -427,7 +427,7 @@ use, and privacy policy.
 | GPU | NVIDIA L40S (46 GB) |
 | SFHQ part | 1 (~90k source images) |
 
-Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](RELEASE_MANIFEST.json).
+Exact model revisions are recorded in [`RELEASE_MANIFEST.json`](scripts/RELEASE_MANIFEST.json) (a copy ships inside each release directory).
 
 ## Citation
 

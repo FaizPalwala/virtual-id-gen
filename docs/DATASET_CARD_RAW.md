@@ -3,7 +3,7 @@
 ## Summary
 
 SFHQ-VirtualID-Raw is a **synthetic, identity-conditioned portrait dataset**
-of 750 synthetic identities — 74,999 full-resolution 1024×1024 portraits
+of 750 synthetic identities — 75,000 full-resolution 1024×1024 portraits
 (100 per identity).  It is the max-size reference companion to the
 SFHQ-VirtualID-Bench benchmark: no splits, no quality trim, no forget
 protocol.  Consumers construct their own train/holdout partitions.
@@ -19,16 +19,16 @@ possible and must be acknowledged.**
 
 | Property | Value |
 |---|---|
-| **Images** | 74,999 |
+| **Images** | 75,000 |
 | **Identities** | 750 |
 | **Images per identity** | 100 (all portraits, no quality trim) |
 | **Resolution** | 1024×1024 |
-| **Format** | JPEG q95, 4:4:4 chroma (re-encoded from PNG at release time) |
+| **Format** | JPEG q95, 4:4:4 chroma (converted in-build from PNG, verify-then-delete) |
 | **Splits** | None (max-size reference) |
 | **Forget protocol** | None |
 
-One candidate per identity was excluded at build time (unreadable image file);
-the `arcface_similarity` column is computed on the shipped JPEGs.
+All 75,000 generated candidates shipped (no exclusions in this release); the
+`arcface_similarity` column is computed on the shipped JPEGs.
 
 ## Labels
 
