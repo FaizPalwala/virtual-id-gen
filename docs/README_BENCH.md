@@ -1,4 +1,5 @@
 ---
+thumbnail: social.png
 pretty_name: SFHQ-VirtualID-Bench (Synthetic Face HQ — Virtual Identities)
 license: other
 license_detail: "Non-Commercial Research Licence — images and metadata (see LICENSE); MIT for code only"
