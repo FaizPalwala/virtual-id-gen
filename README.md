@@ -1,7 +1,5 @@
 ![SFHQ-VirtualID](hero.png)
 
-# SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
-
 > **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
 > (dev → main) release summary.
 
