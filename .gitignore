@@ -240,6 +240,10 @@ RELEASE_TODO.md
 # consumers directly; never committed to this repo
 docs/DOWNSTREAM_CHANGES.md
 
+# Local-only figures (regenerated in Juggernaut-sweep style) — kept local,
+# never committed to this repo
+docs/figures/
+
 # Untracked local docs (dissertation feedback, hyperparameter justification,
 # etc.) — content to draw from, never published to this repo
 untracked/
