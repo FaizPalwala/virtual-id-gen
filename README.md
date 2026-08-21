@@ -1,13 +1,27 @@
-# SFHQ-VirtualID: Synthetic Identity-Conditioned Face Datasets for Machine Unlearning
+<div align="center">
+
+# 🎭 SFHQ-VirtualID
+
+**Synthetic identity-conditioned face datasets for machine-unlearning research**
+
+`750 identities` · `67,500 + 36,064 aligned crops (224×224)` · `75,000 portraits (1024×1024)` · `15-step forget protocol`
+
+[![Hugging Face · Bench](https://img.shields.io/badge/Hugging%20Face-SFHQ--VirtualID--Bench-yellow?logo=huggingface&logoColor=white&style=flat-square)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Bench)
+[![Hugging Face · Raw](https://img.shields.io/badge/Hugging%20Face-SFHQ--VirtualID--Raw-yellow?logo=huggingface&logoColor=white&style=flat-square)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Raw)
+[![DOI · Bench](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21877893-0055A4?style=flat-square)](https://doi.org/10.5281/zenodo.21877893)
+[![DOI · Raw](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21879130-0055A4?style=flat-square)](https://doi.org/10.5281/zenodo.21879130)
+[![License](https://img.shields.io/badge/License-NC%20Research-8B8B8B?style=flat-square)](LICENSE)
+[![Python 3.10](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white&style=flat-square)](https://www.python.org/)
+[![PyTorch 2.6](https://img.shields.io/badge/PyTorch-2.6-EE4C2C?logo=pytorch&logoColor=white&style=flat-square)](https://pytorch.org/)
+[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0-50C878?style=flat-square)](https://github.com/FaizPalwala/virtual-id-gen/releases)
+
+**Bench** — 224×224 aligned crops (balanced + imbalanced) · **Raw** — 1024×1024 portraits · every identity is a **deletion unit**: identity-level splits with MUFAC-aligned train/holdout subsets
+
+---
+</div>
 
 > **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
 > (dev → main) release summary.
-
-[![Bench on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Bench-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Bench)
-[![Raw on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-SFHQ--VirtualID--Raw-blue)](https://huggingface.co/datasets/FaizPalwala/SFHQ-VirtualID-Raw)
-[![Bench DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21877893-blue)](https://doi.org/10.5281/zenodo.21877893)
-[![Raw DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21879130-blue)](https://doi.org/10.5281/zenodo.21879130)
-[![License](https://img.shields.io/badge/License-See%20LICENSE-lightgrey)](LICENSE)
 
 A reproducible pipeline for constructing **synthetic, identity-conditioned face
 clusters** from CC0 synthetic seed images, designed as a benchmark for
