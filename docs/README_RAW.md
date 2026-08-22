@@ -1,5 +1,5 @@
 ---
-thumbnail: social.png
+thumbnail: social.jpg
 pretty_name: SFHQ-VirtualID-Raw (Synthetic Face HQ — Virtual Identities)
 license: other
 license_detail: "Non-Commercial Research Licence — images and metadata (see LICENSE); MIT for code only"

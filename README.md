@@ -1,4 +1,4 @@
-![SFHQ-VirtualID](hero.png)
+![SFHQ-VirtualID](hero.jpg)
 
 > **Release notes:** see [`CHANGELOG.md`](CHANGELOG.md) for the v1.0.0
 > (dev → main) release summary.
